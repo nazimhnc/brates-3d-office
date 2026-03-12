@@ -1,78 +1,112 @@
-// ============================================================
-// BRATES 3D Office — Type Definitions
-// ============================================================
+// ─── Geometry / Spatial ──────────────────────────────────────────
+export type Vec3 = [x: number, y: number, z: number];
 
-/** Agent operational status */
-export type AgentStatus = 'working' | 'idle' | 'meeting' | 'break';
+// ─── Agent ──────────────────────────────────────────────────────
+export type AgentStatus = 'idle' | 'working' | 'meeting' | 'break' | 'away' | 'offline';
+export type AgentGender = 'male' | 'female';
 
-/** Camera viewing mode */
-export type CameraMode = 'orbit' | 'top-down';
-
-/** Gender for agent appearance */
-export type Gender = 'male' | 'female';
-
-/** Desk assignment within a floor */
-export interface DeskAssignment {
-  deskId: string;
-  position: { x: number; y: number; z: number };
-}
-
-/** Agent appearance configuration */
 export interface AgentAppearance {
-  gender: Gender;
-  skinColor: string;
-  hairColor: string;
-  hairStyle: string;
-  shirtColor: string;
-  pantsColor: string;
-  shoeColor: string;
+  skinColor: string;      // hex
+  hairColor: string;      // hex
+  shirtColor: string;     // hex
+  pantsColor: string;     // hex
+  hairStyle: 'short' | 'medium' | 'long' | 'bun' | 'buzz';
 }
 
-/** An AI agent working in the 3D office */
 export interface Agent {
   id: string;
   name: string;
   role: string;
+  gender: AgentGender;
   status: AgentStatus;
-  floorId: string;
-  desk: DeskAssignment | null;
+  avatarColor: string;    // hex – used for avatar circle background
   appearance: AgentAppearance;
-  avatarColor: string;   // fallback color for avatar circle
+  floorId: string;
+  deskId: string | null;
+  position: Vec3;
 }
 
-/** A floor in the office building */
+// ─── Furniture ──────────────────────────────────────────────────
+export interface Desk {
+  id: string;
+  label: string;
+  position: Vec3;
+  rotation: number;         // Y-axis rotation in radians
+  assignedAgentId: string | null;
+}
+
+export interface RoomFurniture {
+  desks: Desk[];
+}
+
+// ─── Room ───────────────────────────────────────────────────────
+export type RoomType =
+  | 'open-office'
+  | 'meeting-room'
+  | 'lounge'
+  | 'server-room'
+  | 'kitchen'
+  | 'executive';
+
+export interface Room {
+  id: string;
+  name: string;
+  type: RoomType;
+  position: Vec3;           // room center relative to floor origin
+  size: [width: number, depth: number];
+  furniture: RoomFurniture;
+}
+
+// ─── Floor ──────────────────────────────────────────────────────
 export interface Floor {
   id: string;
   name: string;
-  level: number;         // 0-based floor index (ground = 0)
-  color: string;         // theme color for the floor
-  agentIds: string[];    // IDs of agents assigned to this floor
+  level: number;            // 0 = ground, 1 = first, etc.
+  rooms: Room[];
+  color: string;            // hex – tint for the floor plane / UI indicators
+  floorColor: string;       // hex – alias used by UI panels
 }
 
-/** The complete office store state */
-export interface OfficeState {
+// ─── Camera ─────────────────────────────────────────────────────
+export type CameraMode = 'orbit' | 'top-down';
+
+// ─── Store (describes the shape other agents will consume) ──────
+export interface OfficeStoreState {
+  // Data
   floors: Floor[];
   agents: Agent[];
+
+  // Selection
   selectedFloorId: string | null;
   selectedAgentId: string | null;
+
+  // Camera / View
   cameraMode: CameraMode;
   viewingFloorLevel: number;
+
+  // UI
   sidebarOpen: boolean;
 }
 
-/** Office store actions */
-export interface OfficeActions {
+export interface OfficeStoreActions {
+  // Floor CRUD
   addFloor: () => void;
   removeFloor: (id: string) => void;
   renameFloor: (id: string, name: string) => void;
+
+  // Agent actions
   moveAgent: (agentId: string, targetFloorId: string) => void;
-  selectFloor: (id: string | null) => void;
+  assignAgentToDesk: (agentId: string, deskId: string) => void;
   selectAgent: (id: string | null) => void;
+  setAgentStatus: (agentId: string, status: AgentStatus) => void;
+
+  // Navigation
+  selectFloor: (id: string | null) => void;
   setCameraMode: (mode: CameraMode) => void;
   setViewingFloor: (level: number) => void;
+
+  // UI
   toggleSidebar: () => void;
-  setAgentStatus: (agentId: string, status: AgentStatus) => void;
 }
 
-/** Combined store type */
-export type OfficeStore = OfficeState & OfficeActions;
+export type OfficeStore = OfficeStoreState & OfficeStoreActions;

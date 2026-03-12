@@ -1,34 +1,40 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { Suspense } from 'react'
+import { Canvas } from '@react-three/fiber'
+import { MainScene } from './components/scene/MainScene'
+import OverlayLayout from './components/ui/OverlayLayout'
+import './index.css'
+
+function LoadingScreen() {
+  return (
+    <div className="fixed inset-0 flex items-center justify-center bg-[#f0eaf8] z-50">
+      <div className="text-center">
+        <div className="w-12 h-12 border-4 border-purple-300 border-t-purple-600 rounded-full animate-spin mx-auto mb-4" />
+        <p className="text-gray-600 text-lg font-medium">Loading 3D Office...</p>
+      </div>
+    </div>
+  )
+}
 
 function App() {
-  const [count, setCount] = useState(0)
-
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
+    <div className="w-screen h-screen relative overflow-hidden">
+      <Suspense fallback={<LoadingScreen />}>
+        <Canvas
+          shadows
+          camera={{ position: [20, 15, 20], fov: 50, near: 0.1, far: 200 }}
+          gl={{
+            antialias: true,
+            powerPreference: 'default',
+            stencil: false,
+            depth: true,
+          }}
+          dpr={[1, 1.5]}
+        >
+          <MainScene />
+        </Canvas>
+      </Suspense>
+      <OverlayLayout />
+    </div>
   )
 }
 
