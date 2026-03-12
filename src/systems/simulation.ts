@@ -26,7 +26,7 @@ import type {
   Vec3,
 } from '../types/index.ts';
 
-import { getAnchorsForMeeting, findAvailableAnchorsOfTypes } from './anchors.ts';
+import { getAnchorsForMeeting, findAvailableAnchorsOfTypes, computeOccupantOffset } from './anchors.ts';
 
 // ─── Config ─────────────────────────────────────────────────────
 
@@ -76,17 +76,41 @@ export type SimCommand =
 interface ActiveChat {
   agentIds: [string, string];
   floorId: string;
+  anchorId: string;
   startedAt: number;
 }
 
 interface ActiveBreak {
   agentId: string;
   floorId: string;
+  anchorId: string;
   startedAt: number;
 }
 
 const activeChats: ActiveChat[] = [];
 const activeBreaks: ActiveBreak[] = [];
+
+/** Tracks which agents are currently at each anchor (by anchor ID). */
+const anchorOccupants = new Map<string, string[]>();
+
+function addOccupant(anchorId: string, agentId: string): number {
+  const list = anchorOccupants.get(anchorId) ?? [];
+  list.push(agentId);
+  anchorOccupants.set(anchorId, list);
+  return list.length - 1; // occupant index
+}
+
+function removeOccupant(anchorId: string, agentId: string): void {
+  const list = anchorOccupants.get(anchorId);
+  if (!list) return;
+  const idx = list.indexOf(agentId);
+  if (idx >= 0) list.splice(idx, 1);
+  if (list.length === 0) anchorOccupants.delete(anchorId);
+}
+
+function getOccupantCount(anchorId: string): number {
+  return anchorOccupants.get(anchorId)?.length ?? 0;
+}
 
 // ─── Helpers ────────────────────────────────────────────────────
 
@@ -218,6 +242,7 @@ export function tick(input: TickInput): SimCommand[] {
         floorId: chat.floorId,
       });
       for (const aid of chat.agentIds) {
+        removeOccupant(chat.anchorId, aid);
         const agent = agents.find((a) => a.id === aid);
         if (!agent) continue;
         const deskPos = deskPositionFor(agent, floors);
@@ -232,6 +257,7 @@ export function tick(input: TickInput): SimCommand[] {
   for (let i = activeBreaks.length - 1; i >= 0; i--) {
     const brk = activeBreaks[i];
     if (now - brk.startedAt >= config.breakDuration) {
+      removeOccupant(brk.anchorId, brk.agentId);
       const agent = agents.find((a) => a.id === brk.agentId);
       if (agent) {
         cmds.push({
@@ -329,18 +355,14 @@ export function tick(input: TickInput): SimCommand[] {
         const pair = shuffled(stillWorking).slice(0, 2);
         const spot = pickRandom(interactionAnchors);
 
-        // Offset the two agents slightly so they face each other.
-        const offset = 0.5;
-        const targetA: Vec3 = [
-          spot.position[0] - offset,
-          spot.position[1],
-          spot.position[2],
-        ];
-        const targetB: Vec3 = [
-          spot.position[0] + offset,
-          spot.position[1],
-          spot.position[2],
-        ];
+        // Track occupancy and compute offset positions
+        const currentCount = getOccupantCount(spot.id);
+        const idxA = addOccupant(spot.id, pair[0].id);
+        const idxB = addOccupant(spot.id, pair[1].id);
+        const totalAtSpot = currentCount + 2;
+
+        const targetA = computeOccupantOffset(spot.position, idxA, totalAtSpot, 0.6);
+        const targetB = computeOccupantOffset(spot.position, idxB, totalAtSpot, 0.6);
 
         cmds.push({ kind: 'set-target', agentId: pair[0].id, target: targetA });
         cmds.push({ kind: 'set-target', agentId: pair[1].id, target: targetB });
@@ -358,6 +380,7 @@ export function tick(input: TickInput): SimCommand[] {
         activeChats.push({
           agentIds: [pair[0].id, pair[1].id],
           floorId,
+          anchorId: spot.id,
           startedAt: now,
         });
       }
@@ -382,7 +405,12 @@ export function tick(input: TickInput): SimCommand[] {
         const agent = pickRandom(breakCandidates);
         const spot = pickRandom(breakAnchors);
 
-        cmds.push({ kind: 'set-target', agentId: agent.id, target: spot.position });
+        // Track occupancy and compute unique offset position
+        const occupantIdx = addOccupant(spot.id, agent.id);
+        const totalAtSpot = getOccupantCount(spot.id);
+        const target = computeOccupantOffset(spot.position, occupantIdx, totalAtSpot, 0.8);
+
+        cmds.push({ kind: 'set-target', agentId: agent.id, target });
         cmds.push({ kind: 'set-status', agentId: agent.id, status: 'break' });
 
         cmds.push({
@@ -396,6 +424,7 @@ export function tick(input: TickInput): SimCommand[] {
         activeBreaks.push({
           agentId: agent.id,
           floorId,
+          anchorId: spot.id,
           startedAt: now,
         });
       }
@@ -412,4 +441,5 @@ export function tick(input: TickInput): SimCommand[] {
 export function resetSimulationState(): void {
   activeChats.length = 0;
   activeBreaks.length = 0;
+  anchorOccupants.clear();
 }

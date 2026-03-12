@@ -171,8 +171,12 @@ export interface UserAvatarState {
 // ─── Quality Tier ───────────────────────────────────────────────
 export type QualityTier = 'low' | 'medium' | 'high';
 
+// ─── App Mode ──────────────────────────────────────────────────
+export type AppMode = 'office' | 'editor';
+
 // ─── Store (describes the shape other agents will consume) ──────
 export interface OfficeStoreState {
+  appMode: AppMode;
   // Data
   floors: Floor[];
   agents: Agent[];
@@ -204,6 +208,9 @@ export interface OfficeStoreState {
 }
 
 export interface OfficeStoreActions {
+  // App mode
+  setAppMode: (mode: AppMode) => void;
+
   // Floor CRUD
   addFloor: () => void;
   removeFloor: (id: string) => void;

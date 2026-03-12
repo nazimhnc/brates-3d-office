@@ -15,6 +15,7 @@ import type {
   UserAvatarState,
   QualityTier,
   ScreenContentType,
+  AppMode,
 } from '../types';
 
 // ─── Theme & Layout constants ──────────────────────────────────
@@ -535,6 +536,7 @@ const FLOOR_HEIGHT = 4;
 // ─── Store ──────────────────────────────────────────────────────
 export const useOfficeStore = create<OfficeStoreExtended>((set, get) => ({
   // ── State ─────────────────────────────────────────────────
+  appMode: 'office' as AppMode,
   floors: defaultFloors,
   agents: defaultAgents,
   anchors: defaultAnchors,
@@ -560,6 +562,9 @@ export const useOfficeStore = create<OfficeStoreExtended>((set, get) => ({
 
   // UI
   activePanel: null,
+
+  // ── App mode ─────────────────────────────────────────────
+  setAppMode: (mode) => set({ appMode: mode }),
 
   // ── Floor CRUD ────────────────────────────────────────────
   addFloor: () =>

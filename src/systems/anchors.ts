@@ -5,7 +5,7 @@
  * the caller reads from the store and passes data in.
  */
 
-import type { Anchor, AnchorType } from '../types/index.ts';
+import type { Anchor, AnchorType, Vec3 } from '../types/index.ts';
 
 // ─── Query helpers ──────────────────────────────────────────────
 
@@ -71,6 +71,33 @@ export function findAvailableAnchorsOfTypes(
       types.includes(a.type) &&
       a.occupantIds.length < a.capacity,
   );
+}
+
+// ─── Spatial distribution ────────────────────────────────────────
+
+/**
+ * Compute an offset position for the Nth occupant at an anchor.
+ *
+ * - 1 occupant:  stand at center.
+ * - 2 occupants: face each other across the anchor (±radius on X).
+ * - 3+ occupants: distribute evenly around a circle.
+ */
+export function computeOccupantOffset(
+  anchorPosition: Vec3,
+  occupantIndex: number,
+  totalOccupants: number,
+  radius = 0.7,
+): Vec3 {
+  if (totalOccupants <= 1) {
+    return [anchorPosition[0], anchorPosition[1], anchorPosition[2]];
+  }
+
+  const angle = (2 * Math.PI * occupantIndex) / totalOccupants;
+  return [
+    anchorPosition[0] + radius * Math.cos(angle),
+    anchorPosition[1],
+    anchorPosition[2] + radius * Math.sin(angle),
+  ];
 }
 
 // ─── Occupancy mutations ────────────────────────────────────────

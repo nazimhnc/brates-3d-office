@@ -86,7 +86,6 @@ function AgentDetail({ agent }: { agent: Agent }) {
   const floors = useOfficeStore((s) => s.floors);
   const selectAgent = useOfficeStore((s) => s.selectAgent);
   const moveAgent = useOfficeStore((s) => s.moveAgent);
-  const setActivePanel = useOfficeStore((s) => s.setActivePanel);
 
   const [moveOpen, setMoveOpen] = useState(false);
 
@@ -237,7 +236,9 @@ function AgentDetail({ agent }: { agent: Agent }) {
             </div>
           </div>
           <button
-            onClick={() => setActivePanel('customize')}
+            onClick={() => {
+              useOfficeStore.getState().setAppMode('editor');
+            }}
             className="
               flex w-full items-center justify-center gap-2 rounded-lg
               bg-indigo-500/20 px-3 py-2 mt-2 text-xs font-medium text-indigo-300
@@ -247,7 +248,7 @@ function AgentDetail({ agent }: { agent: Agent }) {
             "
           >
             <Paintbrush size={12} />
-            Customize
+            Open Character Editor
           </button>
         </div>
 
@@ -325,26 +326,43 @@ function AgentRoster() {
 
       {/* Tab buttons */}
       <div className="flex items-center gap-1 px-3 py-2 border-b border-white/5">
-        {([
-          { key: 'roster' as const, label: 'Roster', icon: Users },
-          { key: 'customize' as const, label: 'Customize', icon: Paintbrush },
-          { key: 'build' as const, label: 'Build', icon: Hammer },
-        ]).map(({ key, label, icon: Icon }) => (
-          <button
-            key={key}
-            onClick={() => setActivePanel(key === 'roster' ? null : key)}
-            className={`
-              flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium
-              transition-all duration-200 flex-1 justify-center
-              ${(key === 'roster' && !activePanel) || activePanel === key
-                ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
-                : 'text-gray-500 hover:text-gray-300 hover:bg-white/5 border border-transparent'}
-            `}
-          >
-            <Icon size={11} />
-            {label}
-          </button>
-        ))}
+        <button
+          onClick={() => setActivePanel(null)}
+          className={`
+            flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium
+            transition-all duration-200 flex-1 justify-center
+            ${!activePanel
+              ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+              : 'text-gray-500 hover:text-gray-300 hover:bg-white/5 border border-transparent'}
+          `}
+        >
+          <Users size={11} />
+          Roster
+        </button>
+        <button
+          onClick={() => useOfficeStore.getState().setAppMode('editor')}
+          className="
+            flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium
+            transition-all duration-200 flex-1 justify-center
+            text-gray-500 hover:text-gray-300 hover:bg-white/5 border border-transparent
+          "
+        >
+          <Paintbrush size={11} />
+          Edit Characters
+        </button>
+        <button
+          onClick={() => setActivePanel('build')}
+          className={`
+            flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium
+            transition-all duration-200 flex-1 justify-center
+            ${activePanel === 'build'
+              ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+              : 'text-gray-500 hover:text-gray-300 hover:bg-white/5 border border-transparent'}
+          `}
+        >
+          <Hammer size={11} />
+          Build
+        </button>
       </div>
 
       {/* Grouped list */}
