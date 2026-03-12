@@ -13,6 +13,7 @@ import { useRef, useMemo, useState, Suspense } from "react";
 import { useFrame } from "@react-three/fiber";
 import { useGLTF, Text, Billboard } from "@react-three/drei";
 import * as THREE from "three";
+import { clone as skeletonClone } from "three/examples/jsm/utils/SkeletonUtils.js";
 import type { AvatarAnimation } from "./AvatarAnimations";
 
 // Re-export the animation type for external use
@@ -169,9 +170,13 @@ function GLBModelInner({
   // Load the GLB (useGLTF caches internally)
   const gltf = useGLTF(modelPath);
 
-  // Clone the scene so each instance has its own scene graph
+  // Clone the scene so each instance has its own scene graph + skeleton
   const clonedScene = useMemo(() => {
-    const clone = gltf.scene.clone(true);
+    const clone = skeletonClone(gltf.scene);
+    // Reset root transform so positioning is controlled by the parent group
+    clone.position.set(0, 0, 0);
+    clone.rotation.set(0, 0, 0);
+    clone.scale.set(1, 1, 1);
 
     // Compute overall bounding box for positional classification
     const bounds = new THREE.Box3().setFromObject(clone);
