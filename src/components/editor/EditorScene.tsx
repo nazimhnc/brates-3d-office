@@ -32,14 +32,15 @@ export function EditorScene() {
       bodyType: agent.gender,
       skinTone: agent.appearance.skinColor,
       hairColor: agent.appearance.hairColor,
-      hairStyle: agent.appearance.hairStyle,
-      eyeColor: agent.appearance.eyeColor,
+      hairStyle:
+        agent.appearance.hairStyle === "medium"
+          ? ("short" as const)
+          : agent.appearance.hairStyle,
       shirtColor: agent.appearance.shirtColor,
       pantsColor: agent.appearance.pantsColor,
       shoeColor: agent.appearance.shoeColor,
       height: agent.appearance.height,
-      glasses: agent.appearance.glasses,
-      beardStyle: agent.appearance.beardStyle,
+      eyeColor: agent.appearance.eyeColor,
     };
   }, [agent]);
 
