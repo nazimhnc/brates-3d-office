@@ -309,6 +309,11 @@ export function useAvatarAnimationDispatch(
     let bodyDY = 0;
     let bodyDX = 0;
 
+    // Seated body drop: when sitting/typing, the whole body lowers so the hip
+    // (at local Y=0.675) lands on the chair seat (at Y≈0.45).
+    // Drop amount = 0.675 - 0.45 = 0.225
+    const SEATED_DROP = -0.225;
+
     if (animation === "idle") {
       // Breathing
       s.breathScale = lerp(s.breathScale, 1 + sin(t * 1.6) * 0.008, f);
@@ -347,7 +352,8 @@ export function useAvatarAnimationDispatch(
       s.rlCalfX = lerp(s.rlCalfX, Math.max(0, sin(t * ws)) * 0.6, f);
     } else if (animation === "sit") {
       s.breathScale = lerp(s.breathScale, 1 + sin(t * 1.4) * 0.006, f);
-      bodyDY = 0;
+      // Drop body so butt is on the chair seat
+      bodyDY = SEATED_DROP;
       bodyDX = 0;
       s.headX = lerp(s.headX, sin(t * 0.5) * 0.04 - 0.06, f);
       s.headY = lerp(s.headY, sin(t * 0.35) * 0.05, f);
@@ -364,7 +370,8 @@ export function useAvatarAnimationDispatch(
       s.rlCalfX = lerp(s.rlCalfX, PI / 2, f);
     } else if (animation === "type") {
       s.breathScale = lerp(s.breathScale, 1 + sin(t * 1.8) * 0.005, f);
-      bodyDY = sin(t * 1.8) * 0.002;
+      // Drop body so butt is on the chair seat + subtle breathing bob
+      bodyDY = SEATED_DROP + sin(t * 1.8) * 0.002;
       bodyDX = sin(t * 0.5) * 0.002;
       s.headX = lerp(s.headX, -0.12 + sin(t * 1.2) * 0.03, f);
       s.headY = lerp(s.headY, 0, f);
@@ -375,16 +382,17 @@ export function useAvatarAnimationDispatch(
       s.raZ = lerp(s.raZ, -0.15, f);
       s.laForeX = lerp(s.laForeX, -0.8 + sin(t * 8) * 0.08, f);
       s.raForeX = lerp(s.raForeX, -0.8 + sin(t * 8 + 1.8) * 0.08, f);
-      s.llX = lerp(s.llX, 0, f);
-      s.rlX = lerp(s.rlX, 0, f);
-      s.llCalfX = lerp(s.llCalfX, 0, f);
-      s.rlCalfX = lerp(s.rlCalfX, 0, f);
+      // Legs in seated position for typing too
+      s.llX = lerp(s.llX, -PI / 2, f);
+      s.rlX = lerp(s.rlX, -PI / 2, f);
+      s.llCalfX = lerp(s.llCalfX, PI / 2, f);
+      s.rlCalfX = lerp(s.rlCalfX, PI / 2, f);
     }
 
     // Apply smoothed values to refs
     if (refs.body.current) {
       // We don't set position directly — the parent handles base position.
-      // We offset Y and X for animation bounce/sway.
+      // We offset Y and X for animation bounce/sway (and seated drop for sit/type).
       refs.body.current.position.y = bodyDY;
       refs.body.current.position.x = bodyDX;
     }

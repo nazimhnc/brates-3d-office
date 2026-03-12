@@ -69,6 +69,7 @@ export interface Floor {
 
 // ─── Camera ─────────────────────────────────────────────────────
 export type CameraMode = 'orbit' | 'top-down';
+export type ViewMode = 'interior' | 'exterior';
 
 // ─── Store (describes the shape other agents will consume) ──────
 export interface OfficeStoreState {
@@ -82,6 +83,7 @@ export interface OfficeStoreState {
 
   // Camera / View
   cameraMode: CameraMode;
+  viewMode: ViewMode;
   viewingFloorLevel: number;
 
   // UI
@@ -103,6 +105,7 @@ export interface OfficeStoreActions {
   // Navigation
   selectFloor: (id: string | null) => void;
   setCameraMode: (mode: CameraMode) => void;
+  setViewMode: (mode: ViewMode) => void;
   setViewingFloor: (level: number) => void;
 
   // UI

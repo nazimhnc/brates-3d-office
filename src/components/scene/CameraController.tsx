@@ -15,21 +15,25 @@ export function CameraController() {
   const { camera } = useThree();
 
   const cameraMode = useOfficeStore((s) => s.cameraMode);
+  const viewMode = useOfficeStore((s) => s.viewMode);
   const viewingFloorLevel = useOfficeStore((s) => s.viewingFloorLevel);
   const selectedAgentId = useOfficeStore((s) => s.selectedAgentId);
 
   const targetOrbitCenter = useRef(new THREE.Vector3(0, 0, 0));
 
-  // Update targets when floor/mode changes
+  // Update targets when floor/mode/viewMode changes
   useEffect(() => {
     const floorY = viewingFloorLevel * FLOOR_HEIGHT;
 
     if (cameraMode === "top-down") {
       targetOrbitCenter.current.set(0, floorY, 0);
+    } else if (viewMode === "interior") {
+      // Interior: orbit center at eye level inside the floor
+      targetOrbitCenter.current.set(0, floorY + ORBIT_TARGET_Y_OFFSET, 0);
     } else {
       targetOrbitCenter.current.set(0, floorY + ORBIT_TARGET_Y_OFFSET, 0);
     }
-  }, [cameraMode, viewingFloorLevel]);
+  }, [cameraMode, viewMode, viewingFloorLevel]);
 
   useFrame((_, dt) => {
     if (!controlsRef.current) return;
@@ -51,13 +55,30 @@ export function CameraController() {
     // Smoothly lerp orbit target
     controls.target.lerp(targetOrbitCenter.current, targetLerpDt);
 
+    const isInterior = viewMode === "interior";
+
     if (cameraMode === "top-down") {
       const topdownPos = new THREE.Vector3(0, floorY + TOPDOWN_HEIGHT, 0.01);
       camera.position.lerp(topdownPos, lerpDt);
       controls.enableRotate = false;
       controls.maxPolarAngle = 0.01;
       controls.minPolarAngle = 0;
+    } else if (isInterior) {
+      // Interior mode: free camera inside the floor
+      controls.enableRotate = true;
+      controls.maxPolarAngle = Math.PI * 0.85; // allow looking almost straight down
+      controls.minPolarAngle = Math.PI / 20;   // allow looking almost straight up
+
+      // Gently guide camera to eye level inside the floor
+      if (!selectedAgentId) {
+        const eyeLevel = floorY + 1.7;
+        const currentY = camera.position.y;
+        if (Math.abs(currentY - eyeLevel) > 0.5) {
+          camera.position.y = THREE.MathUtils.lerp(currentY, eyeLevel, lerpDt * 0.8);
+        }
+      }
     } else {
+      // Exterior orbit mode
       controls.enableRotate = true;
       controls.maxPolarAngle = Math.PI / 2.1;
       controls.minPolarAngle = Math.PI / 12;
@@ -72,8 +93,16 @@ export function CameraController() {
       }
     }
 
-    controls.maxDistance = cameraMode === "top-down" ? TOPDOWN_HEIGHT + 5 : 40;
-    controls.minDistance = cameraMode === "top-down" ? TOPDOWN_HEIGHT - 5 : 5;
+    if (cameraMode === "top-down") {
+      controls.maxDistance = TOPDOWN_HEIGHT + 5;
+      controls.minDistance = TOPDOWN_HEIGHT - 5;
+    } else if (isInterior) {
+      controls.maxDistance = 15;
+      controls.minDistance = 2;
+    } else {
+      controls.maxDistance = 40;
+      controls.minDistance = 5;
+    }
     controls.update();
   });
 
@@ -85,10 +114,10 @@ export function CameraController() {
       dampingFactor={0.08}
       panSpeed={0.8}
       rotateSpeed={0.6}
-      maxPolarAngle={cameraMode === "top-down" ? 0.01 : Math.PI / 2.1}
-      minPolarAngle={cameraMode === "top-down" ? 0 : Math.PI / 12}
-      minDistance={5}
-      maxDistance={40}
+      maxPolarAngle={cameraMode === "top-down" ? 0.01 : viewMode === "interior" ? Math.PI * 0.85 : Math.PI / 2.1}
+      minPolarAngle={cameraMode === "top-down" ? 0 : viewMode === "interior" ? Math.PI / 20 : Math.PI / 12}
+      minDistance={viewMode === "interior" ? 2 : 5}
+      maxDistance={viewMode === "interior" ? 15 : 40}
       makeDefault
     />
   );

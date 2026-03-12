@@ -78,17 +78,19 @@ export interface HumanAvatarProps {
 // Anatomically correct proportions for a ~1.75m human.
 // ══════════════════════════════════════════════════════════════════════════════
 
-// ── HEAD — LatheGeometry cranium with refined profile ──
-// Total head height ~0.23 units. Width ~0.16 at widest (temporal).
+// ── HEAD — LatheGeometry cranium with refined egg-shaped profile ──
+// Total head height ~0.25 units. Narrower at jaw, wider at cranium — egg shape.
+// The LatheGeometry is then scaled (scaleX ~0.88, scaleY ~1.15) for a realistic
+// elongated head rather than a watermelon sphere.
 const HEAD_PROFILE_PTS = [
-  new THREE.Vector2(0, 0),            // chin point
-  new THREE.Vector2(0.020, 0.004),    // chin edge
-  new THREE.Vector2(0.042, 0.014),    // lower jaw
-  new THREE.Vector2(0.062, 0.028),    // jaw angle
-  new THREE.Vector2(0.076, 0.046),    // lower cheek
-  new THREE.Vector2(0.086, 0.065),    // mid cheek
-  new THREE.Vector2(0.094, 0.085),    // cheekbone
-  new THREE.Vector2(0.100, 0.105),    // temple
+  new THREE.Vector2(0, 0),            // chin point (narrowest)
+  new THREE.Vector2(0.016, 0.004),    // chin edge — narrower
+  new THREE.Vector2(0.035, 0.014),    // lower jaw — narrower for defined chin
+  new THREE.Vector2(0.054, 0.028),    // jaw angle — pulled inward
+  new THREE.Vector2(0.070, 0.046),    // lower cheek
+  new THREE.Vector2(0.082, 0.065),    // mid cheek
+  new THREE.Vector2(0.092, 0.085),    // cheekbone
+  new THREE.Vector2(0.099, 0.105),    // temple
   new THREE.Vector2(0.103, 0.125),    // widest — temporal bone
   new THREE.Vector2(0.102, 0.145),    // upper temple
   new THREE.Vector2(0.098, 0.163),    // parietal
@@ -102,15 +104,19 @@ const HEAD_PROFILE_PTS = [
 ];
 const HEAD_GEO = new THREE.LatheGeometry(HEAD_PROFILE_PTS, 32);
 
+// ── CHIN DEFINITION — extra geometry for prominent chin ──
+const CHIN_PROMINENCE_GEO = new THREE.SphereGeometry(0.022, 10, 8);
+
 // ── FACE FEATURES — small geometries for realistic facial detail ──
-const NOSE_BRIDGE_GEO = new THREE.CapsuleGeometry(0.012, 0.030, 5, 8);
-const NOSE_TIP_GEO = new THREE.SphereGeometry(0.016, 10, 8);
-const NOSTRIL_GEO = new THREE.SphereGeometry(0.006, 6, 5);
-const BROW_GEO = new THREE.CapsuleGeometry(0.008, 0.028, 4, 6);
-const EYE_SOCKET_GEO = new THREE.SphereGeometry(0.014, 10, 8);
-const EYEBALL_GEO = new THREE.SphereGeometry(0.012, 10, 8);
-const PUPIL_GEO = new THREE.SphereGeometry(0.006, 8, 6);
-const IRIS_GEO = new THREE.SphereGeometry(0.009, 8, 6);
+const NOSE_BRIDGE_GEO = new THREE.CapsuleGeometry(0.014, 0.035, 5, 8); // slightly larger nose
+const NOSE_TIP_GEO = new THREE.SphereGeometry(0.019, 10, 8); // more prominent nose tip
+const NOSTRIL_GEO = new THREE.SphereGeometry(0.007, 6, 5);
+const BROW_GEO = new THREE.CapsuleGeometry(0.008, 0.028, 4, 6); // brow ridge (skin-colored)
+const EYEBROW_GEO = new THREE.BoxGeometry(0.032, 0.005, 0.008); // visible dark eyebrow
+const EYE_SOCKET_GEO = new THREE.SphereGeometry(0.016, 10, 8); // slightly larger socket
+const EYEBALL_GEO = new THREE.SphereGeometry(0.014, 10, 8); // larger eyeball
+const PUPIL_GEO = new THREE.SphereGeometry(0.007, 8, 6); // slightly larger pupil
+const IRIS_GEO = new THREE.SphereGeometry(0.011, 8, 6); // slightly larger iris
 const UPPER_LIP_GEO = new THREE.CapsuleGeometry(0.005, 0.018, 3, 5);
 const LOWER_LIP_GEO = new THREE.CapsuleGeometry(0.006, 0.020, 3, 5);
 const EAR_GEO = new THREE.SphereGeometry(0.018, 8, 6);
@@ -306,9 +312,19 @@ const MOUTH_MAT = new THREE.MeshStandardMaterial({
   metalness: 0.0,
 });
 
+// Eyebrow material — dark but matches hair broadly
+const EYEBROW_MAT = new THREE.MeshStandardMaterial({
+  color: "#2a2015",
+  roughness: 0.85,
+  metalness: 0.0,
+});
+
 // ══════════════════════════════════════════════════════════════════════════════
 // HAIR RENDERER — sub-component for each hair style
 // ══════════════════════════════════════════════════════════════════════════════
+
+// Hair scale matches the egg-shaped head: narrower X, taller Y, slightly compressed Z
+const HAIR_SCALE: [number, number, number] = [0.88, 1.12, 0.92];
 
 function HairMesh({
   style,
@@ -317,43 +333,44 @@ function HairMesh({
   style: HumanAvatarAppearance["hairStyle"];
   mat: THREE.MeshStandardMaterial;
 }) {
+  // Hair Y positions are raised slightly to account for the taller head (scaleY 1.15)
   switch (style) {
     case "short":
       return (
-        <mesh geometry={HAIR_SHORT_GEO} material={mat} position={[0, 0.118, -0.008]} />
+        <mesh geometry={HAIR_SHORT_GEO} material={mat} position={[0, 0.135, -0.008]} scale={HAIR_SCALE} />
       );
     case "buzz":
       return (
-        <mesh geometry={HAIR_BUZZ_GEO} material={mat} position={[0, 0.120, -0.005]} />
+        <mesh geometry={HAIR_BUZZ_GEO} material={mat} position={[0, 0.138, -0.005]} scale={HAIR_SCALE} />
       );
     case "long":
       return (
         <group>
-          <mesh geometry={HAIR_LONG_TOP_GEO} material={mat} position={[0, 0.120, -0.008]} />
-          <mesh geometry={HAIR_LONG_BACK_GEO} material={mat} position={[0, 0.020, -0.060]} />
+          <mesh geometry={HAIR_LONG_TOP_GEO} material={mat} position={[0, 0.138, -0.008]} scale={HAIR_SCALE} />
+          <mesh geometry={HAIR_LONG_BACK_GEO} material={mat} position={[0, 0.030, -0.055]} scale={[0.88, 1.0, 0.90]} />
         </group>
       );
     case "bun":
       return (
         <group>
-          <mesh geometry={HAIR_BUN_BASE_GEO} material={mat} position={[0, 0.120, -0.005]} />
-          <mesh geometry={HAIR_BUN_GEO} material={mat} position={[0, 0.190, -0.060]} />
+          <mesh geometry={HAIR_BUN_BASE_GEO} material={mat} position={[0, 0.138, -0.005]} scale={HAIR_SCALE} />
+          <mesh geometry={HAIR_BUN_GEO} material={mat} position={[0, 0.210, -0.055]} />
         </group>
       );
     case "ponytail":
       return (
         <group>
-          <mesh geometry={HAIR_PONY_TOP_GEO} material={mat} position={[0, 0.122, -0.005]} />
-          <mesh geometry={HAIR_PONY_TAIL_GEO} material={mat} position={[0, 0.115, -0.100]} rotation={[0.4, 0, 0]} />
+          <mesh geometry={HAIR_PONY_TOP_GEO} material={mat} position={[0, 0.140, -0.005]} scale={HAIR_SCALE} />
+          <mesh geometry={HAIR_PONY_TAIL_GEO} material={mat} position={[0, 0.130, -0.095]} rotation={[0.4, 0, 0]} />
         </group>
       );
     case "curly":
       return (
-        <mesh geometry={HAIR_CURLY_GEO} material={mat} position={[0, 0.110, -0.005]} />
+        <mesh geometry={HAIR_CURLY_GEO} material={mat} position={[0, 0.128, -0.005]} scale={HAIR_SCALE} />
       );
     default:
       return (
-        <mesh geometry={HAIR_SHORT_GEO} material={mat} position={[0, 0.118, -0.008]} />
+        <mesh geometry={HAIR_SHORT_GEO} material={mat} position={[0, 0.135, -0.008]} scale={HAIR_SCALE} />
       );
   }
 }
@@ -495,10 +512,10 @@ export function HumanAvatar({
   // Upper torso top: ~1.285
   // Neck: 1.32
   // Head base: 1.40
-  // Head top: ~1.64
-  // Total: ~1.64 (human average proportions at 1.75m scale)
+  // Head top: ~1.68 (with egg-shape scaleY 1.15)
+  // Total: ~1.68 (human average proportions at 1.75m scale)
 
-  const totalHeight = 1.64;
+  const totalHeight = 1.68;
 
   return (
     <group
@@ -626,49 +643,55 @@ export function HumanAvatar({
 
         {/* ══ HEAD ══ */}
         <group ref={headRef} position={[0, 1.400, 0]}>
-          {/* Cranium — LatheGeometry, compressed front-to-back for realistic depth */}
-          <mesh geometry={HEAD_GEO} material={skinMat} position={[0, -0.105, 0]} scale={[1, 1, 0.90]} />
+          {/* Cranium — egg-shaped: taller (scaleY 1.15), narrower (scaleX 0.88),
+              compressed front-to-back (scaleZ 0.90) for realistic human head */}
+          <mesh geometry={HEAD_GEO} material={skinMat} position={[0, -0.105, 0]} scale={[0.88, 1.15, 0.90]} />
 
-          {/* Chin/jaw definition */}
-          <mesh geometry={CHIN_GEO} material={skinMat} position={[0, -0.102, 0.042]} scale={[1.2, 0.5, 0.8]} />
-          <mesh geometry={JAW_GEO} material={skinMat} position={[0, -0.090, 0.010]} />
+          {/* Chin/jaw definition — more prominent for realistic look */}
+          <mesh geometry={CHIN_GEO} material={skinMat} position={[0, -0.112, 0.042]} scale={[1.1, 0.55, 0.85]} />
+          <mesh geometry={CHIN_PROMINENCE_GEO} material={skinMat} position={[0, -0.118, 0.050]} scale={[0.9, 0.6, 0.7]} />
+          <mesh geometry={JAW_GEO} material={skinMat} position={[0, -0.095, 0.010]} />
 
           {/* ── FACE ── */}
 
-          {/* Brow ridges */}
-          <mesh geometry={BROW_GEO} material={skinMat} position={[-0.030, 0.024, 0.082]} rotation={[0, 0, Math.PI / 2]} />
-          <mesh geometry={BROW_GEO} material={skinMat} position={[0.030, 0.024, 0.082]} rotation={[0, 0, Math.PI / 2]} />
+          {/* Brow ridges (skin colored — structural) */}
+          <mesh geometry={BROW_GEO} material={skinMat} position={[-0.030, 0.028, 0.075]} rotation={[0, 0, Math.PI / 2]} />
+          <mesh geometry={BROW_GEO} material={skinMat} position={[0.030, 0.028, 0.075]} rotation={[0, 0, Math.PI / 2]} />
 
-          {/* Eye sockets (slightly darker) */}
-          <mesh geometry={EYE_SOCKET_GEO} material={skinMat} position={[-0.032, 0.008, 0.078]} scale={[1.2, 0.8, 0.6]} />
-          <mesh geometry={EYE_SOCKET_GEO} material={skinMat} position={[0.032, 0.008, 0.078]} scale={[1.2, 0.8, 0.6]} />
+          {/* Eyebrows — dark, visible thin boxes above the brow ridge */}
+          <mesh geometry={EYEBROW_GEO} material={EYEBROW_MAT} position={[-0.030, 0.036, 0.078]} rotation={[0.15, 0, 0.06]} />
+          <mesh geometry={EYEBROW_GEO} material={EYEBROW_MAT} position={[0.030, 0.036, 0.078]} rotation={[0.15, 0, -0.06]} />
 
-          {/* Eyeballs — white */}
-          <mesh geometry={EYEBALL_GEO} material={WHITE_MAT} position={[-0.032, 0.008, 0.084]} />
-          <mesh geometry={EYEBALL_GEO} material={WHITE_MAT} position={[0.032, 0.008, 0.084]} />
+          {/* Eye sockets */}
+          <mesh geometry={EYE_SOCKET_GEO} material={skinMat} position={[-0.032, 0.010, 0.076]} scale={[1.2, 0.85, 0.6]} />
+          <mesh geometry={EYE_SOCKET_GEO} material={skinMat} position={[0.032, 0.010, 0.076]} scale={[1.2, 0.85, 0.6]} />
 
-          {/* Irises */}
-          <mesh geometry={IRIS_GEO} material={irisMat} position={[-0.032, 0.008, 0.094]} scale={[1, 1, 0.3]} />
-          <mesh geometry={IRIS_GEO} material={irisMat} position={[0.032, 0.008, 0.094]} scale={[1, 1, 0.3]} />
+          {/* Eyeballs — white, larger for visibility */}
+          <mesh geometry={EYEBALL_GEO} material={WHITE_MAT} position={[-0.032, 0.010, 0.082]} />
+          <mesh geometry={EYEBALL_GEO} material={WHITE_MAT} position={[0.032, 0.010, 0.082]} />
 
-          {/* Pupils — black */}
-          <mesh geometry={PUPIL_GEO} material={BLACK_MAT} position={[-0.032, 0.008, 0.096]} scale={[1, 1, 0.25]} />
-          <mesh geometry={PUPIL_GEO} material={BLACK_MAT} position={[0.032, 0.008, 0.096]} scale={[1, 1, 0.25]} />
+          {/* Irises — larger */}
+          <mesh geometry={IRIS_GEO} material={irisMat} position={[-0.032, 0.010, 0.094]} scale={[1, 1, 0.3]} />
+          <mesh geometry={IRIS_GEO} material={irisMat} position={[0.032, 0.010, 0.094]} scale={[1, 1, 0.3]} />
 
-          {/* Nose */}
-          <mesh geometry={NOSE_BRIDGE_GEO} material={skinMat} position={[0, -0.004, 0.095]} />
-          <mesh geometry={NOSE_TIP_GEO} material={skinMat} position={[0, -0.028, 0.102]} scale={[1, 0.65, 0.80]} />
+          {/* Pupils — black, larger */}
+          <mesh geometry={PUPIL_GEO} material={BLACK_MAT} position={[-0.032, 0.010, 0.096]} scale={[1, 1, 0.25]} />
+          <mesh geometry={PUPIL_GEO} material={BLACK_MAT} position={[0.032, 0.010, 0.096]} scale={[1, 1, 0.25]} />
+
+          {/* Nose — more prominent */}
+          <mesh geometry={NOSE_BRIDGE_GEO} material={skinMat} position={[0, -0.002, 0.092]} />
+          <mesh geometry={NOSE_TIP_GEO} material={skinMat} position={[0, -0.030, 0.100]} scale={[1, 0.65, 0.85]} />
           {/* Nostrils */}
-          <mesh geometry={NOSTRIL_GEO} material={skinMat} position={[-0.010, -0.032, 0.096]} scale={[0.8, 0.5, 0.6]} />
-          <mesh geometry={NOSTRIL_GEO} material={skinMat} position={[0.010, -0.032, 0.096]} scale={[0.8, 0.5, 0.6]} />
+          <mesh geometry={NOSTRIL_GEO} material={skinMat} position={[-0.011, -0.035, 0.094]} scale={[0.8, 0.5, 0.6]} />
+          <mesh geometry={NOSTRIL_GEO} material={skinMat} position={[0.011, -0.035, 0.094]} scale={[0.8, 0.5, 0.6]} />
 
           {/* Lips */}
-          <mesh geometry={UPPER_LIP_GEO} material={MOUTH_MAT} position={[0, -0.054, 0.074]} rotation={[0, 0, Math.PI / 2]} />
-          <mesh geometry={LOWER_LIP_GEO} material={MOUTH_MAT} position={[0, -0.064, 0.072]} rotation={[0, 0, Math.PI / 2]} />
+          <mesh geometry={UPPER_LIP_GEO} material={MOUTH_MAT} position={[0, -0.056, 0.072]} rotation={[0, 0, Math.PI / 2]} />
+          <mesh geometry={LOWER_LIP_GEO} material={MOUTH_MAT} position={[0, -0.066, 0.070]} rotation={[0, 0, Math.PI / 2]} />
 
-          {/* Ears */}
-          <mesh geometry={EAR_GEO} material={skinMat} position={[-0.103, -0.002, -0.010]} scale={[0.38, 0.85, 0.55]} />
-          <mesh geometry={EAR_GEO} material={skinMat} position={[0.103, -0.002, -0.010]} scale={[0.38, 0.85, 0.55]} />
+          {/* Ears — adjusted for narrower head */}
+          <mesh geometry={EAR_GEO} material={skinMat} position={[-0.092, -0.002, -0.010]} scale={[0.38, 0.85, 0.55]} />
+          <mesh geometry={EAR_GEO} material={skinMat} position={[0.092, -0.002, -0.010]} scale={[0.38, 0.85, 0.55]} />
 
           {/* ── HAIR ── */}
           <HairMesh style={appearance.hairStyle} mat={hairMat} />

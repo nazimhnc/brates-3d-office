@@ -6,6 +6,7 @@ import type {
   Desk,
   Agent,
   AgentStatus,
+  ViewMode,
   Vec3,
 } from '../types';
 
@@ -39,35 +40,38 @@ export const DESK_LAYOUTS: Record<OfficeLayout, {
   position: [number, number, number];
   rotation: [number, number, number];
 }[]> = {
+  // Standard: two facing rows, 3.0 units apart on X, 3.5 units between rows on Z
   standard: [
-    { position: [-6, 0, -5], rotation: [0, 0, 0] },
-    { position: [-3, 0, -5], rotation: [0, 0, 0] },
-    { position: [0, 0, -5], rotation: [0, 0, 0] },
-    { position: [3, 0, -5], rotation: [0, 0, 0] },
-    { position: [6, 0, -5], rotation: [0, 0, 0] },
-    { position: [-6, 0, -1], rotation: [0, Math.PI, 0] },
-    { position: [-3, 0, -1], rotation: [0, Math.PI, 0] },
-    { position: [0, 0, -1], rotation: [0, Math.PI, 0] },
-    { position: [3, 0, -1], rotation: [0, Math.PI, 0] },
-    { position: [6, 0, -1], rotation: [0, Math.PI, 0] },
+    { position: [-6, 0, -5.5], rotation: [0, 0, 0] },
+    { position: [-3, 0, -5.5], rotation: [0, 0, 0] },
+    { position: [0, 0, -5.5], rotation: [0, 0, 0] },
+    { position: [3, 0, -5.5], rotation: [0, 0, 0] },
+    { position: [6, 0, -5.5], rotation: [0, 0, 0] },
+    { position: [-6, 0, -1.5], rotation: [0, Math.PI, 0] },
+    { position: [-3, 0, -1.5], rotation: [0, Math.PI, 0] },
+    { position: [0, 0, -1.5], rotation: [0, Math.PI, 0] },
+    { position: [3, 0, -1.5], rotation: [0, Math.PI, 0] },
+    { position: [6, 0, -1.5], rotation: [0, Math.PI, 0] },
   ],
+  // Open: angled desks with ample spacing
   open: [
-    { position: [-5, 0, -4], rotation: [0, Math.PI / 4, 0] },
+    { position: [-5, 0, -5], rotation: [0, Math.PI / 4, 0] },
     { position: [0, 0, -6], rotation: [0, 0, 0] },
-    { position: [5, 0, -4], rotation: [0, -Math.PI / 4, 0] },
+    { position: [5, 0, -5], rotation: [0, -Math.PI / 4, 0] },
     { position: [-5, 0, 2], rotation: [0, Math.PI * 0.75, 0] },
     { position: [0, 0, 0], rotation: [0, Math.PI / 2, 0] },
     { position: [5, 0, 2], rotation: [0, -Math.PI * 0.75, 0] },
   ],
+  // Compact: tighter rows but still 2.5 units on X, 3.0 on Z
   compact: [
-    { position: [-4, 0, -5], rotation: [0, 0, 0] },
-    { position: [-1.5, 0, -5], rotation: [0, 0, 0] },
-    { position: [1.5, 0, -5], rotation: [0, 0, 0] },
-    { position: [4, 0, -5], rotation: [0, 0, 0] },
-    { position: [-4, 0, -2], rotation: [0, Math.PI, 0] },
-    { position: [-1.5, 0, -2], rotation: [0, Math.PI, 0] },
-    { position: [1.5, 0, -2], rotation: [0, Math.PI, 0] },
-    { position: [4, 0, -2], rotation: [0, Math.PI, 0] },
+    { position: [-5, 0, -5.5], rotation: [0, 0, 0] },
+    { position: [-2.5, 0, -5.5], rotation: [0, 0, 0] },
+    { position: [0, 0, -5.5], rotation: [0, 0, 0] },
+    { position: [2.5, 0, -5.5], rotation: [0, 0, 0] },
+    { position: [-5, 0, -2], rotation: [0, Math.PI, 0] },
+    { position: [-2.5, 0, -2], rotation: [0, Math.PI, 0] },
+    { position: [0, 0, -2], rotation: [0, Math.PI, 0] },
+    { position: [2.5, 0, -2], rotation: [0, Math.PI, 0] },
   ],
 };
 
@@ -127,44 +131,64 @@ const AGENT_IDS = {
   james: 'agent-james',
 } as const;
 
+// ── Chair offset constant (must match CHAIR_OFFSET_Z in MainScene) ──
+const CHAIR_OFFSET_Z = 0.8;
+
+/** Compute the world-space chair position for a desk. */
+function chairPosition(deskPos: Vec3, rotation: number): Vec3 {
+  // Chair is at local [0, 0, +CHAIR_OFFSET_Z], rotated by desk rotation around Y
+  const cz = CHAIR_OFFSET_Z * Math.cos(rotation);
+  const cx = CHAIR_OFFSET_Z * Math.sin(rotation);
+  // Note: rotation around Y means local +Z maps to [sin(r), 0, cos(r)] but
+  // Three.js Y-rotation: x' = x*cos + z*sin, z' = -x*sin + z*cos
+  // For local offset [0, 0, OFFSET]: x' = OFFSET*sin(r), z' = OFFSET*cos(r)
+  return [deskPos[0] + cx, 0, deskPos[2] + cz];
+}
+
 // ── Ground Floor rooms ──────────────────────────────────────────
+// Desk spacing: 3.0 units apart on X, 3.5 units between facing rows on Z.
+// Row 1 (rotation=0, faces -Z, chair at +Z): desks at Z=-4.5
+// Row 2 (rotation=PI, faces +Z, chair at -Z): desks at Z=-1.0
+// Gap between chair rows: (-4.5+0.8) to (-1.0-0.8) = -3.7 to -1.8 = 1.9 units clear
 const groundFloorRooms: Room[] = [
   makeRoom({
     name: 'Main Office',
     type: 'open-office',
-    position: [-4, 0, -2],
-    size: [8, 6],
+    position: [-3, 0, -3],
+    size: [10, 8],
     desks: [
-      { label: 'Desk A1', position: [-6, 0, -3], rotation: 0, assignedAgentId: AGENT_IDS.ada },
-      { label: 'Desk A2', position: [-4, 0, -3], rotation: 0, assignedAgentId: AGENT_IDS.marcus },
-      { label: 'Desk A3', position: [-6, 0, -1], rotation: Math.PI, assignedAgentId: null },
-      { label: 'Desk A4', position: [-4, 0, -1], rotation: Math.PI, assignedAgentId: AGENT_IDS.priya },
+      // Row 1: facing the back wall (rotation=0), chairs behind at +Z
+      { label: 'Desk A1', position: [-6, 0, -5], rotation: 0, assignedAgentId: AGENT_IDS.ada },
+      { label: 'Desk A2', position: [-3, 0, -5], rotation: 0, assignedAgentId: AGENT_IDS.marcus },
+      // Row 2: facing forward (rotation=PI), chairs behind at -Z
+      { label: 'Desk A3', position: [-6, 0, -1.5], rotation: Math.PI, assignedAgentId: null },
+      { label: 'Desk A4', position: [-3, 0, -1.5], rotation: Math.PI, assignedAgentId: AGENT_IDS.priya },
     ],
   }),
   makeRoom({
     name: 'Meeting Room Alpha',
     type: 'meeting-room',
-    position: [4, 0, -2],
-    size: [5, 5],
+    position: [5, 0, -3],
+    size: [6, 6],
     desks: [
-      { label: 'Conf A', position: [3, 0, -3], rotation: 0 },
-      { label: 'Conf B', position: [5, 0, -3], rotation: 0 },
+      { label: 'Conf A', position: [4, 0, -5], rotation: 0 },
+      { label: 'Conf B', position: [7, 0, -5], rotation: 0 },
     ],
   }),
   makeRoom({
     name: 'Kitchen',
     type: 'kitchen',
-    position: [4, 0, 4],
+    position: [5, 0, 5],
     size: [5, 4],
     desks: [],
   }),
   makeRoom({
     name: 'Lounge',
     type: 'lounge',
-    position: [-4, 0, 4],
+    position: [-4, 0, 5],
     size: [6, 4],
     desks: [
-      { label: 'Hot Desk L1', position: [-5, 0, 4], rotation: 0 },
+      { label: 'Hot Desk L1', position: [-5, 0, 4.5], rotation: 0 },
     ],
   }),
 ];
@@ -174,28 +198,30 @@ const firstFloorRooms: Room[] = [
   makeRoom({
     name: 'Engineering Bay',
     type: 'open-office',
-    position: [-4, 0, -2],
-    size: [8, 6],
+    position: [-3, 0, -3],
+    size: [10, 8],
     desks: [
-      { label: 'Eng B1', position: [-6, 0, -3], rotation: 0, assignedAgentId: AGENT_IDS.omar },
-      { label: 'Eng B2', position: [-4, 0, -3], rotation: 0, assignedAgentId: AGENT_IDS.elena },
-      { label: 'Eng B3', position: [-6, 0, -1], rotation: Math.PI, assignedAgentId: AGENT_IDS.james },
+      // Row 1: facing back wall (rotation=0)
+      { label: 'Eng B1', position: [-6, 0, -5], rotation: 0, assignedAgentId: AGENT_IDS.omar },
+      { label: 'Eng B2', position: [-3, 0, -5], rotation: 0, assignedAgentId: AGENT_IDS.elena },
+      // Row 2: facing forward (rotation=PI)
+      { label: 'Eng B3', position: [-6, 0, -1.5], rotation: Math.PI, assignedAgentId: AGENT_IDS.james },
     ],
   }),
   makeRoom({
     name: 'War Room',
     type: 'meeting-room',
-    position: [4, 0, -2],
-    size: [5, 5],
+    position: [5, 0, -3],
+    size: [6, 6],
     desks: [
-      { label: 'War A', position: [3, 0, -3], rotation: 0 },
-      { label: 'War B', position: [5, 0, -3], rotation: 0 },
+      { label: 'War A', position: [4, 0, -5], rotation: 0 },
+      { label: 'War B', position: [7, 0, -5], rotation: 0 },
     ],
   }),
   makeRoom({
     name: 'Server Room',
     type: 'server-room',
-    position: [4, 0, 4],
+    position: [5, 0, 5],
     size: [5, 4],
     desks: [],
   }),
@@ -222,6 +248,13 @@ const defaultFloors: Floor[] = [
 ];
 
 // ── Default agents ──────────────────────────────────────────────
+// Agent positions are at the CHAIR position (offset from desk center).
+// Desk A1 [-6,0,-5] rot=0  → chair at [-6, 0, -5 + 0.8] = [-6, 0, -4.2]
+// Desk A2 [-3,0,-5] rot=0  → chair at [-3, 0, -4.2]
+// Desk A4 [-3,0,-1.5] rot=PI → chair at [-3, 0, -1.5 - 0.8] = [-3, 0, -2.3]
+// Desk B1 [-6,0,-5] rot=0  → chair at [-6, 0, -4.2]
+// Desk B2 [-3,0,-5] rot=0  → chair at [-3, 0, -4.2]
+// Desk B3 [-6,0,-1.5] rot=PI → chair at [-6, 0, -2.3]
 const defaultAgents: Agent[] = [
   {
     id: AGENT_IDS.ada,
@@ -239,7 +272,7 @@ const defaultAgents: Agent[] = [
     },
     floorId: GROUND_FLOOR_ID,
     deskId: null,
-    position: [-6, 0, -3],
+    position: chairPosition([-6, 0, -5], 0),        // Desk A1
   },
   {
     id: AGENT_IDS.marcus,
@@ -257,7 +290,7 @@ const defaultAgents: Agent[] = [
     },
     floorId: GROUND_FLOOR_ID,
     deskId: null,
-    position: [-4, 0, -3],
+    position: chairPosition([-3, 0, -5], 0),        // Desk A2
   },
   {
     id: AGENT_IDS.priya,
@@ -275,7 +308,7 @@ const defaultAgents: Agent[] = [
     },
     floorId: GROUND_FLOOR_ID,
     deskId: null,
-    position: [-4, 0, -1],
+    position: chairPosition([-3, 0, -1.5], Math.PI), // Desk A4
   },
   {
     id: AGENT_IDS.omar,
@@ -293,7 +326,7 @@ const defaultAgents: Agent[] = [
     },
     floorId: FIRST_FLOOR_ID,
     deskId: null,
-    position: [-6, 0, -3],
+    position: chairPosition([-6, 0, -5], 0),        // Desk B1
   },
   {
     id: AGENT_IDS.elena,
@@ -311,7 +344,7 @@ const defaultAgents: Agent[] = [
     },
     floorId: FIRST_FLOOR_ID,
     deskId: null,
-    position: [-4, 0, -3],
+    position: chairPosition([-3, 0, -5], 0),        // Desk B2
   },
   {
     id: AGENT_IDS.james,
@@ -329,7 +362,7 @@ const defaultAgents: Agent[] = [
     },
     floorId: FIRST_FLOOR_ID,
     deskId: null,
-    position: [-6, 0, -1],
+    position: chairPosition([-6, 0, -1.5], Math.PI), // Desk B3
   },
 ];
 
@@ -386,6 +419,7 @@ export const useOfficeStore = create<OfficeStoreExtended>((set, get) => ({
   selectedFloorId: GROUND_FLOOR_ID,
   selectedAgentId: null,
   cameraMode: 'orbit',
+  viewMode: 'exterior' as ViewMode,
   viewingFloorLevel: 0,
   sidebarOpen: true,
   theme: 'violet' as OfficeTheme,
@@ -482,14 +516,14 @@ export const useOfficeStore = create<OfficeStoreExtended>((set, get) => ({
         })),
       }));
 
-      // Find first empty desk on target floor
+      // Find first empty desk on target floor — place agent at chair position
       let newDeskId: string | null = null;
       let newPosition: Vec3 = [0, 0, 0];
       for (const room of targetFloor.rooms) {
         for (const desk of room.furniture.desks) {
           if (!desk.assignedAgentId) {
             newDeskId = desk.id;
-            newPosition = desk.position;
+            newPosition = chairPosition(desk.position, desk.rotation);
             break;
           }
         }
@@ -559,7 +593,7 @@ export const useOfficeStore = create<OfficeStoreExtended>((set, get) => ({
               ...a,
               floorId: result.floor.id,
               deskId,
-              position: desk.position,
+              position: chairPosition(desk.position, desk.rotation),
             }
           : a,
       );
@@ -589,6 +623,8 @@ export const useOfficeStore = create<OfficeStoreExtended>((set, get) => ({
   },
 
   setCameraMode: (mode) => set({ cameraMode: mode }),
+
+  setViewMode: (mode) => set({ viewMode: mode }),
 
   setViewingFloor: (level) => {
     const floor = get().floors.find((f) => f.level === level);

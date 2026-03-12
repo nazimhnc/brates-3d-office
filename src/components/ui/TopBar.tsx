@@ -3,13 +3,18 @@
 // ============================================================
 
 import { useMemo } from 'react';
-import { Building2, Eye, Layers, Users } from 'lucide-react';
+import { Building2, Eye, Layers, Users, ScanEye } from 'lucide-react';
 import { useOfficeStore } from '../../stores/officeStore';
-import type { CameraMode } from '../../types';
+import type { CameraMode, ViewMode } from '../../types';
 
 const CAMERA_MODES: { mode: CameraMode; label: string; icon: typeof Eye }[] = [
   { mode: 'orbit', label: 'Orbit', icon: Eye },
   { mode: 'top-down', label: 'Top Down', icon: Layers },
+];
+
+const VIEW_MODES: { mode: ViewMode; label: string; icon: typeof Eye }[] = [
+  { mode: 'interior', label: 'Interior', icon: ScanEye },
+  { mode: 'exterior', label: 'Exterior', icon: Building2 },
 ];
 
 export default function TopBar() {
@@ -18,6 +23,8 @@ export default function TopBar() {
   const viewingFloorLevel = useOfficeStore((s) => s.viewingFloorLevel);
   const cameraMode = useOfficeStore((s) => s.cameraMode);
   const setCameraMode = useOfficeStore((s) => s.setCameraMode);
+  const viewMode = useOfficeStore((s) => s.viewMode);
+  const setViewMode = useOfficeStore((s) => s.setViewMode);
 
   const currentFloor = useMemo(
     () => floors.find((f) => f.level === viewingFloorLevel),
@@ -83,6 +90,27 @@ export default function TopBar() {
                   : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'}
               `}
               aria-label={`${label} camera mode`}
+            >
+              <Icon size={13} />
+              <span className="hidden sm:inline">{label}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* View mode toggle (Interior / Exterior) */}
+        <div className="flex rounded-lg bg-white/5 border border-white/10 p-0.5">
+          {VIEW_MODES.map(({ mode, label, icon: Icon }) => (
+            <button
+              key={mode}
+              onClick={() => setViewMode(mode)}
+              className={`
+                flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium
+                transition-all duration-200
+                ${viewMode === mode
+                  ? 'bg-emerald-500/30 text-emerald-300 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'}
+              `}
+              aria-label={`${label} view mode`}
             >
               <Icon size={13} />
               <span className="hidden sm:inline">{label}</span>
