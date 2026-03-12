@@ -20,15 +20,15 @@ export type { AvatarAnimation } from "./AvatarAnimations";
 
 // ── Model paths ──
 
-const MODEL_MALE = "/models/mannequin-male.glb";
-const MODEL_FEMALE = "/models/mannequin-female-new.glb";
-const MODEL_FALLBACK = "/models/mannequin-cc0.glb";
+// ReadyPlayerMe model — proper face, separate outfit meshes, 67-bone skeleton
+const MODEL_MALE = "/models/readyplayer-male.glb";
+// Michelle (Mixamo) — female with face and textured body
+const MODEL_FEMALE = "/models/michelle-female.glb";
 
-// ── Preload all models ──
+// ── Preload models ──
 
 useGLTF.preload(MODEL_MALE);
 useGLTF.preload(MODEL_FEMALE);
-useGLTF.preload(MODEL_FALLBACK);
 
 // ── AvatarAppearance for this system ──
 
@@ -102,50 +102,29 @@ function makeMaterial(
 
 type MeshZone = "skin" | "shirt" | "pants" | "hair" | "shoes" | "unknown";
 
-function classifyMeshByName(name: string): MeshZone {
+type MeshAction = "keep-original" | MeshZone;
+
+function classifyMeshByName(name: string): MeshAction {
   const n = name.toLowerCase();
 
-  // Hair
+  // ReadyPlayerMe / Wolf3D specific naming
+  if (n.includes("wolf3d_outfit_top") || n.includes("outfit_top")) return "shirt";
+  if (n.includes("wolf3d_outfit_bottom") || n.includes("outfit_bottom")) return "pants";
+  if (n.includes("wolf3d_outfit_footwear") || n.includes("footwear")) return "shoes";
+  if (n.includes("wolf3d_head") || n.includes("wolf3d_body")) return "skin";
+  if (n.includes("wolf3d_beard") || n.includes("wolf3d_hair")) return "hair";
+  // Eyes and teeth — keep original materials (they have textures)
+  if (n.includes("eyeleft") || n.includes("eyeright") || n.includes("wolf3d_eye")) return "keep-original";
+  if (n.includes("wolf3d_teeth") || n.includes("teeth")) return "keep-original";
+  // Headwear mesh — keep original
+  if (n.includes("headwear") || n.includes("wolf3d_headwear")) return "keep-original";
+
+  // Generic naming patterns
   if (n.includes("hair") || n.includes("scalp")) return "hair";
-
-  // Shoes / feet
-  if (n.includes("shoe") || n.includes("foot") || n.includes("feet") || n.includes("boot"))
-    return "shoes";
-
-  // Pants / lower body
-  if (
-    n.includes("pant") ||
-    n.includes("trouser") ||
-    n.includes("leg") ||
-    n.includes("lower") ||
-    n.includes("bottom")
-  )
-    return "pants";
-
-  // Shirt / upper body
-  if (
-    n.includes("shirt") ||
-    n.includes("top") ||
-    n.includes("torso") ||
-    n.includes("chest") ||
-    n.includes("upper") ||
-    n.includes("sleeve") ||
-    n.includes("jacket") ||
-    n.includes("cloth")
-  )
-    return "shirt";
-
-  // Skin / body
-  if (
-    n.includes("skin") ||
-    n.includes("body") ||
-    n.includes("head") ||
-    n.includes("face") ||
-    n.includes("hand") ||
-    n.includes("arm") ||
-    n.includes("neck")
-  )
-    return "skin";
+  if (n.includes("shoe") || n.includes("foot") || n.includes("feet") || n.includes("boot")) return "shoes";
+  if (n.includes("pant") || n.includes("trouser") || n.includes("leg") || n.includes("lower") || n.includes("bottom")) return "pants";
+  if (n.includes("shirt") || n.includes("top") || n.includes("torso") || n.includes("chest") || n.includes("upper") || n.includes("sleeve") || n.includes("jacket") || n.includes("cloth")) return "shirt";
+  if (n.includes("skin") || n.includes("body") || n.includes("head") || n.includes("face") || n.includes("hand") || n.includes("arm") || n.includes("neck")) return "skin";
 
   return "unknown";
 }
@@ -217,19 +196,24 @@ function GLBModelInner({
       if (!(child as THREE.Mesh).isMesh) return;
       const mesh = child as THREE.Mesh;
 
-      let zone: MeshZone;
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
 
       if (isSingleMesh) {
-        // Single-mesh model: apply a uniform skin tone (the whole body is one mesh)
-        zone = "skin";
-      } else {
-        // Try name-based classification first
-        zone = classifyMeshByName(mesh.name);
-        if (zone === "unknown") {
-          // Fall back to position-based classification
-          zone = classifyMeshByPosition(mesh, bounds);
-        }
+        // Single-mesh model (e.g. Michelle): preserve original textured material
+        return;
       }
+
+      // Multi-mesh model: classify and apply per-zone materials
+      const action = classifyMeshByName(mesh.name);
+
+      // Keep original material for eyes, teeth, etc. (they have baked textures)
+      if (action === "keep-original") return;
+
+      // Resolve zone — fall back to position-based if unknown
+      const zone: MeshZone = action === "unknown"
+        ? classifyMeshByPosition(mesh, bounds)
+        : action;
 
       switch (zone) {
         case "skin":
@@ -248,13 +232,9 @@ function GLBModelInner({
           mesh.material = shoeMat;
           break;
         default:
-          // Unknown zones get skin material as a safe default
           mesh.material = skinMat;
           break;
       }
-
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
     });
 
     return clone;
