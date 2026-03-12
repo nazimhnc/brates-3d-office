@@ -9,7 +9,7 @@ import { useMemo } from "react";
 import { OrbitControls, ContactShadows, Environment } from "@react-three/drei";
 import * as THREE from "three";
 import { useOfficeStore } from "../../stores/officeStore";
-import { HumanAvatar, DEFAULT_HUMAN_APPEARANCE } from "../humans/HumanAvatar";
+import { HumanAvatar, DEFAULT_APPEARANCE } from "../humans/HumanAvatar";
 
 const groundMaterial = new THREE.MeshStandardMaterial({
   color: "#e8e4f0",
@@ -25,24 +25,8 @@ export function EditorScene() {
     [agents, selectedAgentId],
   );
 
-  const appearance = useMemo(() => {
-    if (!agent) return DEFAULT_HUMAN_APPEARANCE;
-    return {
-      ...DEFAULT_HUMAN_APPEARANCE,
-      bodyType: agent.gender,
-      skinTone: agent.appearance.skinColor,
-      hairColor: agent.appearance.hairColor,
-      hairStyle:
-        agent.appearance.hairStyle === "medium"
-          ? ("short" as const)
-          : agent.appearance.hairStyle,
-      shirtColor: agent.appearance.shirtColor,
-      pantsColor: agent.appearance.pantsColor,
-      shoeColor: agent.appearance.shoeColor,
-      height: agent.appearance.height,
-      eyeColor: agent.appearance.eyeColor,
-    };
-  }, [agent]);
+  const appearance = agent?.appearance ?? DEFAULT_APPEARANCE;
+  const bodyType = agent?.gender ?? "male";
 
   return (
     <>
@@ -87,6 +71,7 @@ export function EditorScene() {
       {agent && (
         <HumanAvatar
           appearance={appearance}
+          bodyType={bodyType}
           position={[0, 0, 0]}
           rotation={0}
           animation="idle"

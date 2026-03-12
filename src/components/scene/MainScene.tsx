@@ -2,7 +2,7 @@ import { useMemo, useCallback } from "react";
 import { Environment, AdaptiveDpr, AdaptiveEvents, ContactShadows } from "@react-three/drei";
 
 import { useOfficeStore } from "../../stores/officeStore";
-import { HumanAvatar, DEFAULT_HUMAN_APPEARANCE } from "../humans/HumanAvatar";
+import { HumanAvatar } from "../humans/HumanAvatar";
 import { UserAvatarComponent } from "../humans/UserAvatar";
 import { CameraController } from "./CameraController";
 import { ClickHandler } from "./ClickHandler";
@@ -52,18 +52,8 @@ function AgentLayer({ agents, floorY }: { agents: Agent[]; floorY: number }) {
       {agents.map((agent) => (
         <HumanAvatar
           key={agent.id}
-          appearance={{
-            ...DEFAULT_HUMAN_APPEARANCE,
-            bodyType: agent.gender,
-            skinTone: agent.appearance.skinColor,
-            hairColor: agent.appearance.hairColor,
-            hairStyle: agent.appearance.hairStyle === "medium" ? "short" : agent.appearance.hairStyle,
-            shirtColor: agent.appearance.shirtColor,
-            pantsColor: agent.appearance.pantsColor,
-            shoeColor: agent.appearance.shoeColor,
-            height: agent.appearance.height,
-            eyeColor: agent.appearance.eyeColor,
-          }}
+          appearance={agent.appearance}
+          bodyType={agent.gender}
           position={[agent.position[0], floorY, agent.position[2]]}
           rotation={agent.facingAngle}
           animation={statusToAnimation(agent.status, agent.movementState === 'walking')}

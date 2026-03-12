@@ -8,7 +8,7 @@
 import { useMemo, useCallback } from "react";
 import { ArrowLeft, Paintbrush } from "lucide-react";
 import { useOfficeStore } from "../../stores/officeStore";
-import type { Agent, AgentAppearance } from "../../types";
+import type { Agent, AgentAppearance, FaceShape } from "../../types";
 
 // ── Color palettes ──────────────────────────────────────────────────────────
 
@@ -61,6 +61,14 @@ const HAIR_STYLE_LABELS: Record<AgentAppearance["hairStyle"], string> = {
   buzz: "Buzz",
   ponytail: "Ponytail",
   curly: "Curly",
+};
+const FACE_SHAPES: FaceShape[] = ["round", "angular", "heart", "square", "oval"];
+const FACE_SHAPE_LABELS: Record<FaceShape, string> = {
+  round: "Round",
+  angular: "Angular",
+  heart: "Heart",
+  square: "Square",
+  oval: "Oval",
 };
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -285,6 +293,32 @@ export default function EditorLayout() {
                       active={app.skinColor === c}
                       onClick={() => update({ skinColor: c })}
                     />
+                  ))}
+                </div>
+              </div>
+
+              {/* Face Shape */}
+              <div>
+                <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                  Face Shape
+                </div>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {FACE_SHAPES.map((shape) => (
+                    <button
+                      key={shape}
+                      onClick={() => update({ faceShape: shape })}
+                      className={`
+                        rounded-lg px-2 py-1.5 text-[10px] font-medium text-center
+                        border transition-all duration-200
+                        ${
+                          app.faceShape === shape
+                            ? "bg-indigo-500/20 border-indigo-500/40 text-indigo-300"
+                            : "bg-white/5 border-white/10 text-gray-400 hover:bg-white/10"
+                        }
+                      `}
+                    >
+                      {FACE_SHAPE_LABELS[shape]}
+                    </button>
                   ))}
                 </div>
               </div>

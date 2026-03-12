@@ -4,6 +4,7 @@ export type Vec3 = [x: number, y: number, z: number];
 // ─── Agent ──────────────────────────────────────────────────────
 export type AgentStatus = 'idle' | 'working' | 'meeting' | 'break' | 'away' | 'offline';
 export type AgentGender = 'male' | 'female';
+export type FaceShape = 'round' | 'angular' | 'heart' | 'square' | 'oval';
 
 // Movement
 export type MovementState = 'stationary' | 'walking' | 'arriving';
@@ -19,6 +20,7 @@ export interface AgentAppearance {
   glasses: boolean;
   beardStyle: 'none' | 'stubble' | 'short' | 'full';
   height: number;         // 0.9 – 1.1 multiplier
+  faceShape: FaceShape;
 }
 
 export interface Agent {
