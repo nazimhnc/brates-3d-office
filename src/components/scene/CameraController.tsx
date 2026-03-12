@@ -7,7 +7,6 @@ import { useOfficeStore } from "../../stores/officeStore";
 const FLOOR_HEIGHT = 4;
 const ORBIT_TARGET_Y_OFFSET = 1.5;
 const TOPDOWN_HEIGHT = 25;
-const CAMERA_LERP_SPEED = 2.5;
 const TARGET_LERP_SPEED = 3.0;
 
 export function CameraController() {
@@ -17,24 +16,37 @@ export function CameraController() {
   const cameraMode = useOfficeStore((s) => s.cameraMode);
   const viewMode = useOfficeStore((s) => s.viewMode);
   const viewingFloorLevel = useOfficeStore((s) => s.viewingFloorLevel);
-  const selectedAgentId = useOfficeStore((s) => s.selectedAgentId);
 
   const targetOrbitCenter = useRef(new THREE.Vector3(0, 0, 0));
+  const prevViewMode = useRef(viewMode);
+  const prevFloorLevel = useRef(viewingFloorLevel);
 
-  // Update targets when floor/mode/viewMode changes
+  // Only reposition camera on MODE SWITCH or FLOOR CHANGE — not every frame
   useEffect(() => {
     const floorY = viewingFloorLevel * FLOOR_HEIGHT;
 
     if (cameraMode === "top-down") {
       targetOrbitCenter.current.set(0, floorY, 0);
+      camera.position.set(0, floorY + TOPDOWN_HEIGHT, 0.01);
     } else if (viewMode === "interior") {
-      // Interior: orbit center at eye level inside the floor
-      targetOrbitCenter.current.set(0, floorY + ORBIT_TARGET_Y_OFFSET, 0);
+      targetOrbitCenter.current.set(0, floorY + 1.0, 0);
+      // Only snap camera when switching TO interior (not every render)
+      if (prevViewMode.current !== "interior" || prevFloorLevel.current !== viewingFloorLevel) {
+        camera.position.set(8, floorY + 1.7, 8);
+      }
     } else {
       targetOrbitCenter.current.set(0, floorY + ORBIT_TARGET_Y_OFFSET, 0);
+      // Only snap camera when switching TO exterior
+      if (prevViewMode.current !== "exterior" || prevFloorLevel.current !== viewingFloorLevel) {
+        camera.position.set(20, floorY + 12, 20);
+      }
     }
-  }, [cameraMode, viewMode, viewingFloorLevel]);
 
+    prevViewMode.current = viewMode;
+    prevFloorLevel.current = viewingFloorLevel;
+  }, [cameraMode, viewMode, viewingFloorLevel, camera]);
+
+  // Smooth orbit target only — DO NOT touch camera.position (let user control it freely)
   useFrame((_, dt) => {
     if (!controlsRef.current) return;
 
@@ -48,61 +60,32 @@ export function CameraController() {
       minDistance: number;
     };
 
-    const floorY = viewingFloorLevel * FLOOR_HEIGHT;
-    const lerpDt = Math.min(dt * CAMERA_LERP_SPEED, 1);
     const targetLerpDt = Math.min(dt * TARGET_LERP_SPEED, 1);
 
-    // Smoothly lerp orbit target
+    // Smoothly move orbit center — this is fine, it's just where you rotate around
     controls.target.lerp(targetOrbitCenter.current, targetLerpDt);
 
-    const isInterior = viewMode === "interior";
-
+    // Set limits based on mode but DON'T force camera position
     if (cameraMode === "top-down") {
-      const topdownPos = new THREE.Vector3(0, floorY + TOPDOWN_HEIGHT, 0.01);
-      camera.position.lerp(topdownPos, lerpDt);
       controls.enableRotate = false;
       controls.maxPolarAngle = 0.01;
       controls.minPolarAngle = 0;
-    } else if (isInterior) {
-      // Interior mode: free camera inside the floor
+      controls.maxDistance = TOPDOWN_HEIGHT + 5;
+      controls.minDistance = TOPDOWN_HEIGHT - 5;
+    } else if (viewMode === "interior") {
       controls.enableRotate = true;
-      controls.maxPolarAngle = Math.PI * 0.85; // allow looking almost straight down
-      controls.minPolarAngle = Math.PI / 20;   // allow looking almost straight up
-
-      // Gently guide camera to eye level inside the floor
-      if (!selectedAgentId) {
-        const eyeLevel = floorY + 1.7;
-        const currentY = camera.position.y;
-        if (Math.abs(currentY - eyeLevel) > 0.5) {
-          camera.position.y = THREE.MathUtils.lerp(currentY, eyeLevel, lerpDt * 0.8);
-        }
-      }
+      controls.maxPolarAngle = Math.PI * 0.9;
+      controls.minPolarAngle = Math.PI / 20;
+      controls.maxDistance = 20;
+      controls.minDistance = 1;
     } else {
-      // Exterior orbit mode
       controls.enableRotate = true;
       controls.maxPolarAngle = Math.PI / 2.1;
       controls.minPolarAngle = Math.PI / 12;
-
-      // Gently guide camera Y to match floor
-      if (!selectedAgentId) {
-        const defaultY = floorY + 12;
-        const currentY = camera.position.y;
-        if (Math.abs(currentY - defaultY) > 1) {
-          camera.position.y = THREE.MathUtils.lerp(currentY, defaultY, lerpDt * 0.5);
-        }
-      }
-    }
-
-    if (cameraMode === "top-down") {
-      controls.maxDistance = TOPDOWN_HEIGHT + 5;
-      controls.minDistance = TOPDOWN_HEIGHT - 5;
-    } else if (isInterior) {
-      controls.maxDistance = 15;
-      controls.minDistance = 2;
-    } else {
-      controls.maxDistance = 40;
+      controls.maxDistance = 50;
       controls.minDistance = 5;
     }
+
     controls.update();
   });
 
@@ -114,10 +97,10 @@ export function CameraController() {
       dampingFactor={0.08}
       panSpeed={0.8}
       rotateSpeed={0.6}
-      maxPolarAngle={cameraMode === "top-down" ? 0.01 : viewMode === "interior" ? Math.PI * 0.85 : Math.PI / 2.1}
-      minPolarAngle={cameraMode === "top-down" ? 0 : viewMode === "interior" ? Math.PI / 20 : Math.PI / 12}
-      minDistance={viewMode === "interior" ? 2 : 5}
-      maxDistance={viewMode === "interior" ? 15 : 40}
+      maxPolarAngle={Math.PI / 2.1}
+      minPolarAngle={Math.PI / 12}
+      minDistance={1}
+      maxDistance={50}
       makeDefault
     />
   );

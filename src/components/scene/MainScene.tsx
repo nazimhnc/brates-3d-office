@@ -598,8 +598,8 @@ export function MainScene() {
       <AdaptiveDpr pixelated />
       <AdaptiveEvents />
 
-      {/* Atmosphere */}
-      <fog attach="fog" args={["#e8e0f5", 30, 80]} />
+      {/* Atmosphere — less fog in interior so you can see clearly */}
+      <fog attach="fog" args={["#e8e0f5", viewMode === 'interior' ? 50 : 30, viewMode === 'interior' ? 150 : 80]} />
       <color attach="background" args={["#f0eaf8"]} />
 
       {/* Environment (lightweight) */}
@@ -608,19 +608,21 @@ export function MainScene() {
       {/* Lighting */}
       <SceneLighting floorY={floorY} />
 
-      {/* Contact shadows */}
-      <ContactShadows
-        position={[0, floorY + 0.01, 0]}
-        opacity={0.3}
-        scale={FLOOR_SIZE}
-        blur={2}
-        far={4}
-        resolution={256}
-        color="#3a2060"
-      />
+      {/* Contact shadows — hide in interior to avoid gray plane artifacts */}
+      {viewMode !== 'interior' && (
+        <ContactShadows
+          position={[0, floorY + 0.01, 0]}
+          opacity={0.3}
+          scale={FLOOR_SIZE}
+          blur={2}
+          far={4}
+          resolution={256}
+          color="#3a2060"
+        />
+      )}
 
-      {/* Ground */}
-      <GroundEnvironment />
+      {/* Ground — hide in interior mode so it doesn't block the view */}
+      {viewMode !== 'interior' && <GroundEnvironment />}
 
       {/* Building */}
       <BuildingStructure
