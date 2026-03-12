@@ -2,10 +2,10 @@
 // TopBar — Top navigation bar: branding, floor info, controls
 // ============================================================
 
-import { useMemo } from 'react';
-import { Building2, Eye, Layers, Users, ScanEye } from 'lucide-react';
+import { useMemo, useCallback } from 'react';
+import { Building2, Eye, Layers, Users, ScanEye, UserRound, Monitor, Camera } from 'lucide-react';
 import { useOfficeStore } from '../../stores/officeStore';
-import type { CameraMode, ViewMode } from '../../types';
+import type { CameraMode, ViewMode, QualityTier, UserCameraMode } from '../../types';
 
 const CAMERA_MODES: { mode: CameraMode; label: string; icon: typeof Eye }[] = [
   { mode: 'orbit', label: 'Orbit', icon: Eye },
@@ -17,6 +17,18 @@ const VIEW_MODES: { mode: ViewMode; label: string; icon: typeof Eye }[] = [
   { mode: 'exterior', label: 'Exterior', icon: Building2 },
 ];
 
+const QUALITY_TIERS: { tier: QualityTier; label: string }[] = [
+  { tier: 'low', label: 'Low' },
+  { tier: 'medium', label: 'Med' },
+  { tier: 'high', label: 'High' },
+];
+
+const USER_CAM_MODES: { mode: UserCameraMode; label: string }[] = [
+  { mode: 'orbit', label: 'Orbit' },
+  { mode: 'first-person', label: '1st' },
+  { mode: 'third-person', label: '3rd' },
+];
+
 export default function TopBar() {
   const floors = useOfficeStore((s) => s.floors);
   const agents = useOfficeStore((s) => s.agents);
@@ -25,6 +37,25 @@ export default function TopBar() {
   const setCameraMode = useOfficeStore((s) => s.setCameraMode);
   const viewMode = useOfficeStore((s) => s.viewMode);
   const setViewMode = useOfficeStore((s) => s.setViewMode);
+  const userAvatar = useOfficeStore((s) => s.userAvatar);
+  const toggleUserAvatar = useOfficeStore((s) => s.toggleUserAvatar);
+  const setUserCameraMode = useOfficeStore((s) => s.setUserCameraMode);
+  const qualityTier = useOfficeStore((s) => s.qualityTier);
+  const setQualityTier = useOfficeStore((s) => s.setQualityTier);
+
+  const handleToggleAvatar = useCallback(() => {
+    toggleUserAvatar();
+  }, [toggleUserAvatar]);
+
+  const handleQualityChange = useCallback(
+    (tier: QualityTier) => setQualityTier(tier),
+    [setQualityTier],
+  );
+
+  const handleUserCamMode = useCallback(
+    (mode: UserCameraMode) => setUserCameraMode(mode),
+    [setUserCameraMode],
+  );
 
   const currentFloor = useMemo(
     () => floors.find((f) => f.level === viewingFloorLevel),
@@ -114,6 +145,64 @@ export default function TopBar() {
             >
               <Icon size={13} />
               <span className="hidden sm:inline">{label}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* User avatar toggle */}
+        <button
+          onClick={handleToggleAvatar}
+          className={`
+            flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium
+            border transition-all duration-200
+            ${userAvatar.enabled
+              ? 'bg-indigo-500/30 border-indigo-500/40 text-indigo-300'
+              : 'bg-white/5 border-white/10 text-gray-500 hover:text-gray-300 hover:bg-white/10'}
+          `}
+          aria-label={userAvatar.enabled ? 'Disable user avatar' : 'Enable user avatar'}
+        >
+          <UserRound size={13} />
+          <span className="hidden sm:inline">You</span>
+        </button>
+
+        {/* User camera mode (shown only when avatar is on) */}
+        {userAvatar.enabled && (
+          <div className="flex rounded-lg bg-white/5 border border-white/10 p-0.5">
+            {USER_CAM_MODES.map(({ mode, label }) => (
+              <button
+                key={mode}
+                onClick={() => handleUserCamMode(mode)}
+                className={`
+                  flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium
+                  transition-all duration-200
+                  ${userAvatar.cameraMode === mode
+                    ? 'bg-indigo-500/30 text-indigo-300 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'}
+                `}
+              >
+                <Camera size={11} />
+                <span>{label}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Quality tier */}
+        <div className="flex rounded-lg bg-white/5 border border-white/10 p-0.5">
+          {QUALITY_TIERS.map(({ tier, label }) => (
+            <button
+              key={tier}
+              onClick={() => handleQualityChange(tier)}
+              className={`
+                flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium
+                transition-all duration-200
+                ${qualityTier === tier
+                  ? 'bg-amber-500/30 text-amber-300 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'}
+              `}
+            >
+              <Monitor size={11} />
+              <span>{label}</span>
             </button>
           ))}
         </div>

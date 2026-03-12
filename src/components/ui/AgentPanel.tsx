@@ -17,6 +17,9 @@ import {
   Users,
   WifiOff,
   LogOut,
+  Paintbrush,
+  Hammer,
+  Footprints,
 } from 'lucide-react';
 import { useOfficeStore } from '../../stores/officeStore';
 import type { AgentStatus, Agent, Floor, Desk } from '../../types';
@@ -83,6 +86,7 @@ function AgentDetail({ agent }: { agent: Agent }) {
   const floors = useOfficeStore((s) => s.floors);
   const selectAgent = useOfficeStore((s) => s.selectAgent);
   const moveAgent = useOfficeStore((s) => s.moveAgent);
+  const setActivePanel = useOfficeStore((s) => s.setActivePanel);
 
   const [moveOpen, setMoveOpen] = useState(false);
 
@@ -232,6 +236,43 @@ function AgentDetail({ agent }: { agent: Agent }) {
               <div className="h-3 w-3 rounded-sm border border-white/20" style={{ backgroundColor: agent.appearance.hairColor }} />
             </div>
           </div>
+          <button
+            onClick={() => setActivePanel('customize')}
+            className="
+              flex w-full items-center justify-center gap-2 rounded-lg
+              bg-indigo-500/20 px-3 py-2 mt-2 text-xs font-medium text-indigo-300
+              border border-indigo-500/30
+              hover:bg-indigo-500/30 hover:text-indigo-200
+              active:scale-[0.98] transition-all duration-200
+            "
+          >
+            <Paintbrush size={12} />
+            Customize
+          </button>
+        </div>
+
+        {/* Current Activity */}
+        <div className="rounded-xl bg-white/5 border border-white/10 p-3 space-y-2">
+          <h4 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+            <Monitor size={11} />
+            Activity
+          </h4>
+          <div className="space-y-1.5 text-[12px]">
+            <div className="flex items-center gap-2">
+              <span className="text-gray-600">Screen:</span>
+              <span className="text-gray-300 capitalize">{agent.screenContent.replace('-', ' ')}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-gray-600">Task:</span>
+              <span className="text-gray-300">{agent.currentTask || 'None'}</span>
+            </div>
+            {agent.movementState === 'walking' && (
+              <div className="flex items-center gap-1.5 text-amber-400">
+                <Footprints size={11} />
+                <span className="text-[11px] font-medium">Walking</span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -246,6 +287,8 @@ function AgentRoster() {
   const selectAgent = useOfficeStore((s) => s.selectAgent);
   const selectFloor = useOfficeStore((s) => s.selectFloor);
   const setViewingFloor = useOfficeStore((s) => s.setViewingFloor);
+  const setActivePanel = useOfficeStore((s) => s.setActivePanel);
+  const activePanel = useOfficeStore((s) => s.activePanel);
 
   const grouped = useMemo(() => {
     const map = new Map<string, Agent[]>();
@@ -278,6 +321,30 @@ function AgentRoster() {
         <span className="ml-auto rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-medium text-gray-400">
           {agents.length}
         </span>
+      </div>
+
+      {/* Tab buttons */}
+      <div className="flex items-center gap-1 px-3 py-2 border-b border-white/5">
+        {([
+          { key: 'roster' as const, label: 'Roster', icon: Users },
+          { key: 'customize' as const, label: 'Customize', icon: Paintbrush },
+          { key: 'build' as const, label: 'Build', icon: Hammer },
+        ]).map(({ key, label, icon: Icon }) => (
+          <button
+            key={key}
+            onClick={() => setActivePanel(key === 'roster' ? null : key)}
+            className={`
+              flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium
+              transition-all duration-200 flex-1 justify-center
+              ${(key === 'roster' && !activePanel) || activePanel === key
+                ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+                : 'text-gray-500 hover:text-gray-300 hover:bg-white/5 border border-transparent'}
+            `}
+          >
+            <Icon size={11} />
+            {label}
+          </button>
+        ))}
       </div>
 
       {/* Grouped list */}

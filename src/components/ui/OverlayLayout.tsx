@@ -10,8 +10,14 @@ import Sidebar from './Sidebar';
 import AgentPanel from './AgentPanel';
 import FloorNavigator from './FloorNavigator';
 import MiniMap from './MiniMap';
+import CharacterCustomizer from './CharacterCustomizer';
+import BuildModePanel from './BuildModePanel';
+import SimulationControls from './SimulationControls';
+import { useOfficeStore } from '../../stores/officeStore';
 
 export default function OverlayLayout() {
+  const activePanel = useOfficeStore((s) => s.activePanel);
+
   return (
     <div className="fixed inset-0 z-30 pointer-events-none">
       <div className="pointer-events-auto">
@@ -20,8 +26,15 @@ export default function OverlayLayout() {
       <div className="pointer-events-auto">
         <Sidebar />
       </div>
+      {/* Right panel: show customizer or build mode, else default AgentPanel */}
       <div className="pointer-events-auto">
-        <AgentPanel />
+        {activePanel === 'customize' ? (
+          <CharacterCustomizer />
+        ) : activePanel === 'build' ? (
+          <BuildModePanel />
+        ) : (
+          <AgentPanel />
+        )}
       </div>
       <div className="pointer-events-auto">
         <FloorNavigator />
@@ -29,6 +42,8 @@ export default function OverlayLayout() {
       <div className="pointer-events-auto">
         <MiniMap />
       </div>
+      {/* Simulation controls — always visible at bottom center */}
+      <SimulationControls />
     </div>
   );
 }

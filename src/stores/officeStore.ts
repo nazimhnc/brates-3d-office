@@ -6,11 +6,18 @@ import type {
   Desk,
   Agent,
   AgentStatus,
+  AgentAppearance,
   ViewMode,
   Vec3,
+  Anchor,
+  Meeting,
+  MovementState,
+  UserAvatarState,
+  QualityTier,
+  ScreenContentType,
 } from '../types';
 
-// ─── Theme & Layout constants (consumed by MainScene) ──────────
+// ─── Theme & Layout constants ──────────────────────────────────
 export type OfficeTheme = 'violet' | 'blue' | 'warm';
 export type OfficeLayout = 'standard' | 'open' | 'compact';
 
@@ -40,7 +47,6 @@ export const DESK_LAYOUTS: Record<OfficeLayout, {
   position: [number, number, number];
   rotation: [number, number, number];
 }[]> = {
-  // Standard: two facing rows, 3.0 units apart on X, 3.5 units between rows on Z
   standard: [
     { position: [-6, 0, -5.5], rotation: [0, 0, 0] },
     { position: [-3, 0, -5.5], rotation: [0, 0, 0] },
@@ -53,7 +59,6 @@ export const DESK_LAYOUTS: Record<OfficeLayout, {
     { position: [3, 0, -1.5], rotation: [0, Math.PI, 0] },
     { position: [6, 0, -1.5], rotation: [0, Math.PI, 0] },
   ],
-  // Open: angled desks with ample spacing
   open: [
     { position: [-5, 0, -5], rotation: [0, Math.PI / 4, 0] },
     { position: [0, 0, -6], rotation: [0, 0, 0] },
@@ -62,7 +67,6 @@ export const DESK_LAYOUTS: Record<OfficeLayout, {
     { position: [0, 0, 0], rotation: [0, Math.PI / 2, 0] },
     { position: [5, 0, 2], rotation: [0, -Math.PI * 0.75, 0] },
   ],
-  // Compact: tighter rows but still 2.5 units on X, 3.0 on Z
   compact: [
     { position: [-5, 0, -5.5], rotation: [0, 0, 0] },
     { position: [-2.5, 0, -5.5], rotation: [0, 0, 0] },
@@ -117,11 +121,9 @@ const makeRoom = (input: RoomInput): Room => ({
 
 // ─── Default data ───────────────────────────────────────────────
 
-// Floor IDs (stable so agents can reference them)
 const GROUND_FLOOR_ID = 'floor-ground';
 const FIRST_FLOOR_ID = 'floor-first';
 
-// Agent IDs (stable so desks can reference them)
 const AGENT_IDS = {
   ada: 'agent-ada',
   marcus: 'agent-marcus',
@@ -131,25 +133,44 @@ const AGENT_IDS = {
   james: 'agent-james',
 } as const;
 
-// ── Chair offset constant (must match CHAIR_OFFSET_Z in MainScene) ──
+// ── Chair offset constant ──
 const CHAIR_OFFSET_Z = 0.8;
 
 /** Compute the world-space chair position for a desk. */
-function chairPosition(deskPos: Vec3, rotation: number): Vec3 {
-  // Chair is at local [0, 0, +CHAIR_OFFSET_Z], rotated by desk rotation around Y
+export function chairPosition(deskPos: Vec3, rotation: number): Vec3 {
   const cz = CHAIR_OFFSET_Z * Math.cos(rotation);
   const cx = CHAIR_OFFSET_Z * Math.sin(rotation);
-  // Note: rotation around Y means local +Z maps to [sin(r), 0, cos(r)] but
-  // Three.js Y-rotation: x' = x*cos + z*sin, z' = -x*sin + z*cos
-  // For local offset [0, 0, OFFSET]: x' = OFFSET*sin(r), z' = OFFSET*cos(r)
   return [deskPos[0] + cx, 0, deskPos[2] + cz];
 }
 
-// ── Ground Floor rooms ──────────────────────────────────────────
-// Desk spacing: 3.0 units apart on X, 3.5 units between facing rows on Z.
-// Row 1 (rotation=0, faces -Z, chair at +Z): desks at Z=-4.5
-// Row 2 (rotation=PI, faces +Z, chair at -Z): desks at Z=-1.0
-// Gap between chair rows: (-4.5+0.8) to (-1.0-0.8) = -3.7 to -1.8 = 1.9 units clear
+// ── Default appearance factory ──
+function defaultAppearance(overrides: Partial<AgentAppearance>): AgentAppearance {
+  return {
+    skinColor: '#e8b89a',
+    hairColor: '#3a2520',
+    shirtColor: '#2c3e6b',
+    pantsColor: '#34404f',
+    shoeColor: '#1a1a2e',
+    hairStyle: 'short',
+    eyeColor: '#4a6741',
+    glasses: false,
+    beardStyle: 'none',
+    height: 1.0,
+    ...overrides,
+  };
+}
+
+// ── Screen content by role ──
+export function screenForRole(role: string): ScreenContentType {
+  const r = role.toLowerCase();
+  if (r.includes('engineer') || r.includes('devops')) return 'code';
+  if (r.includes('design')) return 'design';
+  if (r.includes('ai')) return 'terminal';
+  if (r.includes('architect')) return 'dashboard';
+  return 'code';
+}
+
+// ── Ground Floor rooms ──
 const groundFloorRooms: Room[] = [
   makeRoom({
     name: 'Main Office',
@@ -157,10 +178,8 @@ const groundFloorRooms: Room[] = [
     position: [-3, 0, -3],
     size: [10, 8],
     desks: [
-      // Row 1: facing the back wall (rotation=0), chairs behind at +Z
       { label: 'Desk A1', position: [-6, 0, -5], rotation: 0, assignedAgentId: AGENT_IDS.ada },
       { label: 'Desk A2', position: [-3, 0, -5], rotation: 0, assignedAgentId: AGENT_IDS.marcus },
-      // Row 2: facing forward (rotation=PI), chairs behind at -Z
       { label: 'Desk A3', position: [-6, 0, -1.5], rotation: Math.PI, assignedAgentId: null },
       { label: 'Desk A4', position: [-3, 0, -1.5], rotation: Math.PI, assignedAgentId: AGENT_IDS.priya },
     ],
@@ -193,7 +212,7 @@ const groundFloorRooms: Room[] = [
   }),
 ];
 
-// ── First Floor rooms ───────────────────────────────────────────
+// ── First Floor rooms ──
 const firstFloorRooms: Room[] = [
   makeRoom({
     name: 'Engineering Bay',
@@ -201,10 +220,8 @@ const firstFloorRooms: Room[] = [
     position: [-3, 0, -3],
     size: [10, 8],
     desks: [
-      // Row 1: facing back wall (rotation=0)
       { label: 'Eng B1', position: [-6, 0, -5], rotation: 0, assignedAgentId: AGENT_IDS.omar },
       { label: 'Eng B2', position: [-3, 0, -5], rotation: 0, assignedAgentId: AGENT_IDS.elena },
-      // Row 2: facing forward (rotation=PI)
       { label: 'Eng B3', position: [-6, 0, -1.5], rotation: Math.PI, assignedAgentId: AGENT_IDS.james },
     ],
   }),
@@ -227,7 +244,7 @@ const firstFloorRooms: Room[] = [
   }),
 ];
 
-// ── Default floors ──────────────────────────────────────────────
+// ── Default floors ──
 const defaultFloors: Floor[] = [
   {
     id: GROUND_FLOOR_ID,
@@ -247,14 +264,7 @@ const defaultFloors: Floor[] = [
   },
 ];
 
-// ── Default agents ──────────────────────────────────────────────
-// Agent positions are at the CHAIR position (offset from desk center).
-// Desk A1 [-6,0,-5] rot=0  → chair at [-6, 0, -5 + 0.8] = [-6, 0, -4.2]
-// Desk A2 [-3,0,-5] rot=0  → chair at [-3, 0, -4.2]
-// Desk A4 [-3,0,-1.5] rot=PI → chair at [-3, 0, -1.5 - 0.8] = [-3, 0, -2.3]
-// Desk B1 [-6,0,-5] rot=0  → chair at [-6, 0, -4.2]
-// Desk B2 [-3,0,-5] rot=0  → chair at [-3, 0, -4.2]
-// Desk B3 [-6,0,-1.5] rot=PI → chair at [-6, 0, -2.3]
+// ── Default agents ──
 const defaultAgents: Agent[] = [
   {
     id: AGENT_IDS.ada,
@@ -263,16 +273,21 @@ const defaultAgents: Agent[] = [
     gender: 'female',
     status: 'working',
     avatarColor: '#6c5ce7',
-    appearance: {
+    appearance: defaultAppearance({
       skinColor: '#c68642',
       hairColor: '#1a1a2e',
       shirtColor: '#6c5ce7',
       pantsColor: '#2d3436',
       hairStyle: 'long',
-    },
+    }),
     floorId: GROUND_FLOOR_ID,
     deskId: null,
-    position: chairPosition([-6, 0, -5], 0),        // Desk A1
+    position: chairPosition([-6, 0, -5], 0),
+    movementState: 'stationary',
+    targetPosition: null,
+    facingAngle: Math.PI,
+    screenContent: 'dashboard',
+    currentTask: 'System Architecture',
   },
   {
     id: AGENT_IDS.marcus,
@@ -281,16 +296,21 @@ const defaultAgents: Agent[] = [
     gender: 'male',
     status: 'working',
     avatarColor: '#00b894',
-    appearance: {
+    appearance: defaultAppearance({
       skinColor: '#8d5524',
       hairColor: '#0a0a0a',
       shirtColor: '#00b894',
       pantsColor: '#2d3436',
       hairStyle: 'short',
-    },
+    }),
     floorId: GROUND_FLOOR_ID,
     deskId: null,
-    position: chairPosition([-3, 0, -5], 0),        // Desk A2
+    position: chairPosition([-3, 0, -5], 0),
+    movementState: 'stationary',
+    targetPosition: null,
+    facingAngle: Math.PI,
+    screenContent: 'code',
+    currentTask: 'API Endpoints',
   },
   {
     id: AGENT_IDS.priya,
@@ -299,16 +319,22 @@ const defaultAgents: Agent[] = [
     gender: 'female',
     status: 'idle',
     avatarColor: '#fd79a8',
-    appearance: {
+    appearance: defaultAppearance({
       skinColor: '#c68642',
       hairColor: '#2d1b00',
       shirtColor: '#fd79a8',
       pantsColor: '#636e72',
       hairStyle: 'bun',
-    },
+      eyeColor: '#3d2b1f',
+    }),
     floorId: GROUND_FLOOR_ID,
     deskId: null,
-    position: chairPosition([-3, 0, -1.5], Math.PI), // Desk A4
+    position: chairPosition([-3, 0, -1.5], Math.PI),
+    movementState: 'stationary',
+    targetPosition: null,
+    facingAngle: 0,
+    screenContent: 'terminal',
+    currentTask: 'Model Training',
   },
   {
     id: AGENT_IDS.omar,
@@ -317,16 +343,21 @@ const defaultAgents: Agent[] = [
     gender: 'male',
     status: 'working',
     avatarColor: '#0984e3',
-    appearance: {
+    appearance: defaultAppearance({
       skinColor: '#e0ac69',
       hairColor: '#2d1b00',
       shirtColor: '#0984e3',
       pantsColor: '#2d3436',
       hairStyle: 'buzz',
-    },
+    }),
     floorId: FIRST_FLOOR_ID,
     deskId: null,
-    position: chairPosition([-6, 0, -5], 0),        // Desk B1
+    position: chairPosition([-6, 0, -5], 0),
+    movementState: 'stationary',
+    targetPosition: null,
+    facingAngle: Math.PI,
+    screenContent: 'code',
+    currentTask: 'UI Components',
   },
   {
     id: AGENT_IDS.elena,
@@ -335,16 +366,21 @@ const defaultAgents: Agent[] = [
     gender: 'female',
     status: 'meeting',
     avatarColor: '#e17055',
-    appearance: {
+    appearance: defaultAppearance({
       skinColor: '#f1c27d',
       hairColor: '#b5651d',
       shirtColor: '#e17055',
       pantsColor: '#2d3436',
-      hairStyle: 'medium',
-    },
+      hairStyle: 'long',
+    }),
     floorId: FIRST_FLOOR_ID,
     deskId: null,
-    position: chairPosition([-3, 0, -5], 0),        // Desk B2
+    position: chairPosition([-3, 0, -5], 0),
+    movementState: 'stationary',
+    targetPosition: null,
+    facingAngle: Math.PI,
+    screenContent: 'design',
+    currentTask: 'Landing Page',
   },
   {
     id: AGENT_IDS.james,
@@ -353,22 +389,89 @@ const defaultAgents: Agent[] = [
     gender: 'male',
     status: 'break',
     avatarColor: '#74b9ff',
-    appearance: {
+    appearance: defaultAppearance({
       skinColor: '#ffdbac',
       hairColor: '#d4a574',
       shirtColor: '#74b9ff',
       pantsColor: '#636e72',
       hairStyle: 'short',
-    },
+    }),
     floorId: FIRST_FLOOR_ID,
     deskId: null,
-    position: chairPosition([-6, 0, -1.5], Math.PI), // Desk B3
+    position: chairPosition([-6, 0, -1.5], Math.PI),
+    movementState: 'stationary',
+    targetPosition: null,
+    facingAngle: 0,
+    screenContent: 'terminal',
+    currentTask: 'CI/CD Pipeline',
   },
 ];
 
-// ─── Wire up deskIds ────────────────────────────────────────────
-// After desks are created with uid(), find each agent's desk and
-// set the deskId on the agent.
+// ── Default anchors (meeting spots, interaction points) ──
+const defaultAnchors: Anchor[] = [
+  // Ground floor meeting room spots (around the circular table)
+  {
+    id: 'anchor-gf-meet-1', type: 'meeting-spot',
+    position: [4.5, 0, -2], rotation: Math.PI / 2,
+    floorId: GROUND_FLOOR_ID, capacity: 1, occupantIds: [],
+  },
+  {
+    id: 'anchor-gf-meet-2', type: 'meeting-spot',
+    position: [6.5, 0, -2], rotation: -Math.PI / 2,
+    floorId: GROUND_FLOOR_ID, capacity: 1, occupantIds: [],
+  },
+  {
+    id: 'anchor-gf-meet-3', type: 'meeting-spot',
+    position: [5.5, 0, -1], rotation: Math.PI,
+    floorId: GROUND_FLOOR_ID, capacity: 1, occupantIds: [],
+  },
+  {
+    id: 'anchor-gf-meet-4', type: 'meeting-spot',
+    position: [5.5, 0, -3], rotation: 0,
+    floorId: GROUND_FLOOR_ID, capacity: 1, occupantIds: [],
+  },
+  // Kitchen interaction spot
+  {
+    id: 'anchor-gf-kitchen', type: 'kitchen-spot',
+    position: [5, 0, 5], rotation: 0,
+    floorId: GROUND_FLOOR_ID, capacity: 3, occupantIds: [],
+  },
+  // Lounge spot
+  {
+    id: 'anchor-gf-lounge', type: 'lounge-spot',
+    position: [-4, 0, 5], rotation: 0,
+    floorId: GROUND_FLOOR_ID, capacity: 4, occupantIds: [],
+  },
+  // Hallway interaction point (between rooms)
+  {
+    id: 'anchor-gf-hall', type: 'interaction-point',
+    position: [0, 0, 1], rotation: 0,
+    floorId: GROUND_FLOOR_ID, capacity: 2, occupantIds: [],
+  },
+  // First floor meeting spots
+  {
+    id: 'anchor-f1-meet-1', type: 'meeting-spot',
+    position: [4.5, 0, -2], rotation: Math.PI / 2,
+    floorId: FIRST_FLOOR_ID, capacity: 1, occupantIds: [],
+  },
+  {
+    id: 'anchor-f1-meet-2', type: 'meeting-spot',
+    position: [6.5, 0, -2], rotation: -Math.PI / 2,
+    floorId: FIRST_FLOOR_ID, capacity: 1, occupantIds: [],
+  },
+  {
+    id: 'anchor-f1-meet-3', type: 'meeting-spot',
+    position: [5.5, 0, -1], rotation: Math.PI,
+    floorId: FIRST_FLOOR_ID, capacity: 1, occupantIds: [],
+  },
+  {
+    id: 'anchor-f1-hall', type: 'interaction-point',
+    position: [0, 0, 1], rotation: 0,
+    floorId: FIRST_FLOOR_ID, capacity: 2, occupantIds: [],
+  },
+];
+
+// ── Wire up deskIds ──
 function wireAgentDesks(floors: Floor[], agents: Agent[]): void {
   for (const floor of floors) {
     for (const room of floor.rooms) {
@@ -400,7 +503,25 @@ function findDesk(
   return null;
 }
 
-// ─── Extended store type with theme/layout/getActiveFloor ────────
+// ─── Default user avatar ─────────────────────────────────────────
+const defaultUserAvatar: UserAvatarState = {
+  enabled: false,
+  position: [0, 0, 3],
+  rotation: 0,
+  appearance: defaultAppearance({
+    skinColor: '#e8c8a0',
+    hairColor: '#2a1a10',
+    shirtColor: '#4a4a6a',
+    pantsColor: '#2a2a3a',
+    shoeColor: '#1a1a1a',
+    hairStyle: 'short',
+    height: 1.02,
+  }),
+  cameraMode: 'orbit',
+  moveSpeed: 4.0,
+};
+
+// ─── Extended store type ────────────────────────────────────────
 interface OfficeStoreExtended extends OfficeStore {
   theme: OfficeTheme;
   layout: OfficeLayout;
@@ -413,9 +534,10 @@ const FLOOR_HEIGHT = 4;
 
 // ─── Store ──────────────────────────────────────────────────────
 export const useOfficeStore = create<OfficeStoreExtended>((set, get) => ({
-  // ── State ───────────────────────────────────────────────────
+  // ── State ─────────────────────────────────────────────────
   floors: defaultFloors,
   agents: defaultAgents,
+  anchors: defaultAnchors,
   selectedFloorId: GROUND_FLOOR_ID,
   selectedAgentId: null,
   cameraMode: 'orbit',
@@ -425,7 +547,21 @@ export const useOfficeStore = create<OfficeStoreExtended>((set, get) => ({
   theme: 'violet' as OfficeTheme,
   layout: 'standard' as OfficeLayout,
 
-  // ── Floor CRUD ──────────────────────────────────────────────
+  // User
+  userAvatar: defaultUserAvatar,
+
+  // Simulation
+  events: [],
+  meetings: [],
+  simulationRunning: true,
+
+  // Quality
+  qualityTier: 'medium' as QualityTier,
+
+  // UI
+  activePanel: null,
+
+  // ── Floor CRUD ────────────────────────────────────────────
   addFloor: () =>
     set((state) => {
       const nextLevel = state.floors.length;
@@ -463,13 +599,12 @@ export const useOfficeStore = create<OfficeStoreExtended>((set, get) => ({
 
   removeFloor: (id) =>
     set((state) => {
-      if (state.floors.length <= 1) return state; // keep at least 1 floor
+      if (state.floors.length <= 1) return state;
       const removedFloor = state.floors.find((f) => f.id === id);
       const floors = state.floors
         .filter((f) => f.id !== id)
-        .map((f, i) => ({ ...f, level: i })); // re-index levels
+        .map((f, i) => ({ ...f, level: i }));
 
-      // Move agents from removed floor to first remaining floor
       let agents = state.agents;
       if (removedFloor && floors.length > 0) {
         agents = state.agents.map((a) =>
@@ -493,14 +628,13 @@ export const useOfficeStore = create<OfficeStoreExtended>((set, get) => ({
       floors: state.floors.map((f) => (f.id === id ? { ...f, name } : f)),
     })),
 
-  // ── Agent actions ───────────────────────────────────────────
+  // ── Agent actions ─────────────────────────────────────────
   moveAgent: (agentId, targetFloorId) =>
     set((state) => {
       const agent = state.agents.find((a) => a.id === agentId);
       const targetFloor = state.floors.find((f) => f.id === targetFloorId);
       if (!agent || !targetFloor) return state;
 
-      // Unassign from current desk
       const floors = state.floors.map((floor) => ({
         ...floor,
         rooms: floor.rooms.map((room) => ({
@@ -516,7 +650,6 @@ export const useOfficeStore = create<OfficeStoreExtended>((set, get) => ({
         })),
       }));
 
-      // Find first empty desk on target floor — place agent at chair position
       let newDeskId: string | null = null;
       let newPosition: Vec3 = [0, 0, 0];
       for (const room of targetFloor.rooms) {
@@ -530,7 +663,6 @@ export const useOfficeStore = create<OfficeStoreExtended>((set, get) => ({
         if (newDeskId) break;
       }
 
-      // Assign to new desk in floors copy
       const updatedFloors = newDeskId
         ? floors.map((floor) => ({
             ...floor,
@@ -563,11 +695,8 @@ export const useOfficeStore = create<OfficeStoreExtended>((set, get) => ({
       if (!result) return state;
 
       const { desk } = result;
-
-      // Desk already occupied by someone else
       if (desk.assignedAgentId && desk.assignedAgentId !== agentId) return state;
 
-      // Unassign agent from any current desk, then assign to new desk
       const floors = state.floors.map((floor) => ({
         ...floor,
         rooms: floor.rooms.map((room) => ({
@@ -575,12 +704,8 @@ export const useOfficeStore = create<OfficeStoreExtended>((set, get) => ({
           furniture: {
             ...room.furniture,
             desks: room.furniture.desks.map((d) => {
-              if (d.assignedAgentId === agentId) {
-                return { ...d, assignedAgentId: null };
-              }
-              if (d.id === deskId) {
-                return { ...d, assignedAgentId: agentId };
-              }
+              if (d.assignedAgentId === agentId) return { ...d, assignedAgentId: null };
+              if (d.id === deskId) return { ...d, assignedAgentId: agentId };
               return d;
             }),
           },
@@ -610,7 +735,106 @@ export const useOfficeStore = create<OfficeStoreExtended>((set, get) => ({
       ),
     })),
 
-  // ── Navigation ──────────────────────────────────────────────
+  updateAgentAppearance: (agentId: string, appearance: Partial<AgentAppearance>) =>
+    set((state) => ({
+      agents: state.agents.map((a) =>
+        a.id === agentId
+          ? { ...a, appearance: { ...a.appearance, ...appearance } }
+          : a,
+      ),
+    })),
+
+  // ── Movement ──────────────────────────────────────────────
+  setAgentTarget: (agentId: string, target: Vec3) =>
+    set((state) => ({
+      agents: state.agents.map((a) =>
+        a.id === agentId
+          ? { ...a, targetPosition: target, movementState: 'walking' as MovementState }
+          : a,
+      ),
+    })),
+
+  updateAgentPosition: (agentId: string, position: Vec3, movState: MovementState) =>
+    set((state) => ({
+      agents: state.agents.map((a) =>
+        a.id === agentId
+          ? {
+              ...a,
+              position,
+              movementState: movState,
+              targetPosition: movState === 'stationary' ? null : a.targetPosition,
+            }
+          : a,
+      ),
+    })),
+
+  setAgentFacing: (agentId: string, angle: number) =>
+    set((state) => ({
+      agents: state.agents.map((a) =>
+        a.id === agentId ? { ...a, facingAngle: angle } : a,
+      ),
+    })),
+
+  // ── Simulation ────────────────────────────────────────────
+  pushEvent: (eventData) =>
+    set((state) => ({
+      events: [
+        ...state.events.slice(-49), // keep last 50 events
+        {
+          ...eventData,
+          id: uid('evt'),
+          timestamp: Date.now(),
+        },
+      ],
+    })),
+
+  startMeeting: (title, organizerId, participantIds, anchorId, floorId) =>
+    set((state) => {
+      const meeting: Meeting = {
+        id: uid('meeting'),
+        title,
+        anchorId,
+        floorId,
+        organizerId,
+        participantIds,
+        status: 'gathering',
+        startedAt: Date.now(),
+      };
+      return { meetings: [...state.meetings, meeting] };
+    }),
+
+  endMeeting: (meetingId: string) =>
+    set((state) => ({
+      meetings: state.meetings.map((m) =>
+        m.id === meetingId ? { ...m, status: 'dispersing' as const } : m,
+      ),
+    })),
+
+  toggleSimulation: () =>
+    set((state) => ({ simulationRunning: !state.simulationRunning })),
+
+  // ── User ──────────────────────────────────────────────────
+  setUserPosition: (position) =>
+    set((state) => ({
+      userAvatar: { ...state.userAvatar, position },
+    })),
+
+  setUserRotation: (rotation) =>
+    set((state) => ({
+      userAvatar: { ...state.userAvatar, rotation },
+    })),
+
+  setUserCameraMode: (mode) =>
+    set((state) => ({
+      userAvatar: { ...state.userAvatar, cameraMode: mode },
+    })),
+
+  toggleUserAvatar: () =>
+    set((state) => ({
+      userAvatar: { ...state.userAvatar, enabled: !state.userAvatar.enabled },
+    })),
+
+  // ── Navigation ────────────────────────────────────────────
   selectFloor: (id) => {
     if (id === null) {
       set({ selectedFloorId: null });
@@ -623,7 +847,6 @@ export const useOfficeStore = create<OfficeStoreExtended>((set, get) => ({
   },
 
   setCameraMode: (mode) => set({ cameraMode: mode }),
-
   setViewMode: (mode) => set({ viewMode: mode }),
 
   setViewingFloor: (level) => {
@@ -634,8 +857,12 @@ export const useOfficeStore = create<OfficeStoreExtended>((set, get) => ({
     });
   },
 
-  // ── UI ──────────────────────────────────────────────────────
+  // ── Quality ───────────────────────────────────────────────
+  setQualityTier: (tier) => set({ qualityTier: tier }),
+
+  // ── UI ────────────────────────────────────────────────────
   toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
+  setActivePanel: (panel) => set({ activePanel: panel }),
 
   // ── Theme & Layout ────────────────────────────────────────
   setTheme: (theme) => set({ theme }),

@@ -1,15 +1,48 @@
+// ══════════════════════════════════════════════════════════════════════════════
+// CameraController — Multi-mode camera system for the 3D office.
+//
+// Supports four camera modes:
+//   1. Orbit (existing)      — OrbitControls, user drags to rotate around office
+//   2. Top-down (existing)   — Fixed top camera, no rotation
+//   3. First-person (new)    — Camera at avatar eye level, pointer-lock mouse look
+//   4. Third-person (new)    — Camera follows behind avatar, smooth follow
+//
+// FP/TP modes are only active when the user avatar is enabled.
+// OrbitControls are NOT rendered in FP/TP modes to avoid input conflicts.
+// ══════════════════════════════════════════════════════════════════════════════
+
 import { useRef, useEffect } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import { useOfficeStore } from "../../stores/officeStore";
 
+// ── Constants ────────────────────────────────────────────────────────────────
+
 const FLOOR_HEIGHT = 4;
 const ORBIT_TARGET_Y_OFFSET = 1.5;
 const TOPDOWN_HEIGHT = 25;
 const TARGET_LERP_SPEED = 3.0;
 
-export function CameraController() {
+// First-person
+const FP_EYE_HEIGHT = 1.65; // eye level above floor
+
+// Third-person
+const TP_OFFSET = new THREE.Vector3(0, 3, 5); // behind and above
+const TP_FOLLOW_SPEED = 5.0; // lerp speed for camera follow
+const TP_LOOK_HEIGHT = 1.2; // look at avatar chest height
+
+// ── Reusable THREE objects (no per-frame allocations) ────────────────────────
+
+const _targetPos = new THREE.Vector3();
+const _desiredCam = new THREE.Vector3();
+const _lookAt = new THREE.Vector3();
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Orbit / Top-Down controller — existing behavior preserved exactly
+// ══════════════════════════════════════════════════════════════════════════════
+
+function OrbitCameraController() {
   const controlsRef = useRef<React.ComponentRef<typeof OrbitControls>>(null);
   const { camera } = useThree();
 
@@ -30,14 +63,22 @@ export function CameraController() {
       camera.position.set(0, floorY + TOPDOWN_HEIGHT, 0.01);
     } else if (viewMode === "interior") {
       targetOrbitCenter.current.set(0, floorY + 1.0, 0);
-      // Only snap camera when switching TO interior (not every render)
-      if (prevViewMode.current !== "interior" || prevFloorLevel.current !== viewingFloorLevel) {
+      if (
+        prevViewMode.current !== "interior" ||
+        prevFloorLevel.current !== viewingFloorLevel
+      ) {
         camera.position.set(8, floorY + 1.7, 8);
       }
     } else {
-      targetOrbitCenter.current.set(0, floorY + ORBIT_TARGET_Y_OFFSET, 0);
-      // Only snap camera when switching TO exterior
-      if (prevViewMode.current !== "exterior" || prevFloorLevel.current !== viewingFloorLevel) {
+      targetOrbitCenter.current.set(
+        0,
+        floorY + ORBIT_TARGET_Y_OFFSET,
+        0,
+      );
+      if (
+        prevViewMode.current !== "exterior" ||
+        prevFloorLevel.current !== viewingFloorLevel
+      ) {
         camera.position.set(20, floorY + 12, 20);
       }
     }
@@ -46,7 +87,7 @@ export function CameraController() {
     prevFloorLevel.current = viewingFloorLevel;
   }, [cameraMode, viewMode, viewingFloorLevel, camera]);
 
-  // Smooth orbit target only — DO NOT touch camera.position (let user control it freely)
+  // Smooth orbit target only — DO NOT touch camera.position
   useFrame((_, dt) => {
     if (!controlsRef.current) return;
 
@@ -61,11 +102,8 @@ export function CameraController() {
     };
 
     const targetLerpDt = Math.min(dt * TARGET_LERP_SPEED, 1);
-
-    // Smoothly move orbit center — this is fine, it's just where you rotate around
     controls.target.lerp(targetOrbitCenter.current, targetLerpDt);
 
-    // Set limits based on mode but DON'T force camera position
     if (cameraMode === "top-down") {
       controls.enableRotate = false;
       controls.maxPolarAngle = 0.01;
@@ -104,6 +142,148 @@ export function CameraController() {
       makeDefault
     />
   );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// First-Person camera — no OrbitControls, camera at avatar eye height
+// ══════════════════════════════════════════════════════════════════════════════
+
+function FirstPersonCamera() {
+  const { camera } = useThree();
+  const pitchRef = useRef(0);
+  const getState = useOfficeStore.getState;
+
+  // Set initial camera orientation
+  useEffect(() => {
+    const state = getState();
+    const pos = state.userAvatar.position;
+    const floorY = state.viewingFloorLevel * FLOOR_HEIGHT;
+    const eyeY = floorY + FP_EYE_HEIGHT;
+    camera.position.set(pos[0], eyeY, pos[2]);
+    pitchRef.current = 0;
+  }, [camera, getState]);
+
+  // Handle pitch from mouse movement
+  useEffect(() => {
+    function onMouseMove(e: MouseEvent) {
+      if (document.pointerLockElement == null) return;
+      pitchRef.current -= e.movementY * 0.002;
+      // Clamp pitch to avoid flipping
+      pitchRef.current = Math.max(
+        -Math.PI / 2.2,
+        Math.min(Math.PI / 2.2, pitchRef.current),
+      );
+    }
+
+    document.addEventListener("mousemove", onMouseMove);
+    return () => document.removeEventListener("mousemove", onMouseMove);
+  }, []);
+
+  useFrame(() => {
+    const state = getState();
+    const pos = state.userAvatar.position;
+    const yaw = state.userAvatar.rotation;
+    const floorY = state.viewingFloorLevel * FLOOR_HEIGHT;
+    const eyeY = floorY + FP_EYE_HEIGHT;
+
+    // Position camera at avatar eye level
+    camera.position.set(pos[0], eyeY, pos[2]);
+
+    // Apply yaw + pitch via Euler rotation
+    camera.rotation.order = "YXZ";
+    camera.rotation.set(pitchRef.current, yaw, 0);
+  });
+
+  return null;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Third-Person camera — follows behind avatar with smooth lerp
+// ══════════════════════════════════════════════════════════════════════════════
+
+function ThirdPersonCamera() {
+  const { camera } = useThree();
+  const getState = useOfficeStore.getState;
+
+  // Initialize camera behind avatar
+  useEffect(() => {
+    const state = getState();
+    const pos = state.userAvatar.position;
+    const yaw = state.userAvatar.rotation;
+    const floorY = state.viewingFloorLevel * FLOOR_HEIGHT;
+
+    // Compute desired position: rotate offset by avatar's yaw
+    const sinY = Math.sin(yaw);
+    const cosY = Math.cos(yaw);
+    const offsetX = TP_OFFSET.x * cosY + TP_OFFSET.z * sinY;
+    const offsetZ = -TP_OFFSET.x * sinY + TP_OFFSET.z * cosY;
+
+    camera.position.set(
+      pos[0] + offsetX,
+      floorY + TP_OFFSET.y,
+      pos[2] + offsetZ,
+    );
+  }, [camera, getState]);
+
+  useFrame((_, dt) => {
+    const state = getState();
+    const pos = state.userAvatar.position;
+    const yaw = state.userAvatar.rotation;
+    const floorY = state.viewingFloorLevel * FLOOR_HEIGHT;
+
+    // Target: avatar position at floor level
+    _targetPos.set(pos[0], floorY, pos[2]);
+
+    // Desired camera position: offset rotated by avatar yaw
+    const sinY = Math.sin(yaw);
+    const cosY = Math.cos(yaw);
+    const offsetX = TP_OFFSET.x * cosY + TP_OFFSET.z * sinY;
+    const offsetZ = -TP_OFFSET.x * sinY + TP_OFFSET.z * cosY;
+
+    _desiredCam.set(
+      pos[0] + offsetX,
+      floorY + TP_OFFSET.y,
+      pos[2] + offsetZ,
+    );
+
+    // Smooth follow
+    const lerpFactor = Math.min(dt * TP_FOLLOW_SPEED, 1);
+    camera.position.lerp(_desiredCam, lerpFactor);
+
+    // Look at avatar chest
+    _lookAt.set(pos[0], floorY + TP_LOOK_HEIGHT, pos[2]);
+    camera.lookAt(_lookAt);
+  });
+
+  return null;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Main CameraController — switches between sub-controllers
+// ══════════════════════════════════════════════════════════════════════════════
+
+export function CameraController() {
+  const avatarEnabled = useOfficeStore((s) => s.userAvatar.enabled);
+  const userCameraMode = useOfficeStore((s) => s.userAvatar.cameraMode);
+
+  // Determine which camera mode to use
+  const useFirstPerson =
+    avatarEnabled && userCameraMode === "first-person";
+  const useThirdPerson =
+    avatarEnabled && userCameraMode === "third-person";
+
+  // If user avatar is active in FP or TP mode, use those controllers
+  // Otherwise fall back to the existing orbit/top-down system
+  if (useFirstPerson) {
+    return <FirstPersonCamera />;
+  }
+
+  if (useThirdPerson) {
+    return <ThirdPersonCamera />;
+  }
+
+  // Default: orbit / top-down with OrbitControls
+  return <OrbitCameraController />;
 }
 
 export default CameraController;
