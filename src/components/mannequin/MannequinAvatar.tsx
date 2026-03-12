@@ -35,6 +35,8 @@ const DEFAULT_APPEARANCE: HumanAvatarAppearance = {
   shoeColor: "#1a1a2e",
   height: 1.0,
   bodyType: "male",
+  glasses: false,
+  beardStyle: "none",
 };
 
 export function MannequinAvatar({

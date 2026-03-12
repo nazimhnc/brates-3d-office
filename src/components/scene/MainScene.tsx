@@ -57,9 +57,14 @@ function AgentLayer({ agents, floorY }: { agents: Agent[]; floorY: number }) {
             bodyType: agent.gender,
             skinTone: agent.appearance.skinColor,
             hairColor: agent.appearance.hairColor,
-            hairStyle: agent.appearance.hairStyle === "medium" ? "short" : agent.appearance.hairStyle,
+            hairStyle: agent.appearance.hairStyle,
+            eyeColor: agent.appearance.eyeColor,
             shirtColor: agent.appearance.shirtColor,
             pantsColor: agent.appearance.pantsColor,
+            shoeColor: agent.appearance.shoeColor,
+            height: agent.appearance.height,
+            glasses: agent.appearance.glasses,
+            beardStyle: agent.appearance.beardStyle,
           }}
           position={[agent.position[0], floorY, agent.position[2]]}
           rotation={agent.facingAngle}
